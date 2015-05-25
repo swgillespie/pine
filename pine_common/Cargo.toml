@@ -1,0 +1,7 @@
+[package]
+name = "pine_common"
+version = "0.1.0"
+authors = ["swgillespie <sean.william.g@gmail.com>"]
+
+[dependencies]
+rustc-serialize = "0.3.14"

@@ -1,0 +1,13 @@
+[package]
+name = "pine_typecheck"
+version = "0.1.0"
+authors = ["swgillespie <sean.william.g@gmail.com>"]
+
+[dependencies.pine_common]
+path = "../pine_common"
+
+[dependencies.pine_syntax]
+path = "../pine_syntax"
+
+[dependencies]
+log = "0.3.1"

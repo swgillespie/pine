@@ -1,0 +1,13 @@
+[package]
+name = "pinec"
+version = "0.1.0"
+authors = ["swgillespie <sean.william.g@gmail.com>"]
+
+[dependencies.pine_syntax]
+path = "pine_syntax"
+
+[dependencies.pine_typecheck]
+path = "pine_typecheck"
+
+[dependencies]
+rustc-serialize = "0.3.14"
