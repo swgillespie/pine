@@ -274,12 +274,20 @@ impl TypeBinder {
     }
 
     fn visit_postfix_function_call<'ast>(&mut self,
-                                         _: &'ast ast::SpannedExpression,
+                                         first_arg: &'ast ast::SpannedExpression,
                                          name: &'ast ast::SpannedString,
-                                         _: &'ast [ast::SpannedExpression]) -> Result<Bound<typed::TypedExpression>, CompileDiagnostic> {
-        span_err_and_return!(self, name,
-                             "functions have not been implemented yet"
-                             .to_string());
+                                         rest_args: &'ast [ast::SpannedExpression]) -> Result<Bound<typed::TypedExpression>, CompileDiagnostic> {
+        // this is a quick transform from
+        // arg1.function(args...) to function(arg1, args...)
+        let function = ast::Spanned {
+            span: name.span,
+            data: ast::Expression::Identifier(name.clone())
+        };
+        let mut args = vec![first_arg.clone()];
+        for arg in rest_args.iter() {
+            args.push(arg.clone());
+        }
+        self.visit_function_call(&function, &args)
     }
 
     fn visit_let<'ast>(&mut self,
