@@ -1,5 +1,3 @@
-#![feature(box_patterns)]
-
 extern crate pine_common;
 extern crate pine_syntax;
 
@@ -9,4 +7,4 @@ extern crate log;
 pub mod types;
 pub mod typed_ast;
 pub mod type_binder;
-pub mod symbol_table;
+//pub mod symbol_table;

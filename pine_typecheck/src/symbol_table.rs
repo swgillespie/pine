@@ -1,5 +1,6 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
+use types::{Types, Substitution, TypeVar};
 
 pub struct SymbolTable<K, V> {
     global_scope: HashMap<K, V>,

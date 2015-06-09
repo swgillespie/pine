@@ -1,92 +1,238 @@
-use std::fmt;
-use std::collections::HashMap;
+use std::hash::Hash;
+use std::collections::{HashSet, HashMap};
 use std::sync::atomic::{AtomicIsize, ATOMIC_ISIZE_INIT, Ordering};
+use std::fmt;
 
-#[derive(Debug, PartialEq, Clone)]
+pub type TypeVar = i32;
+pub type Substitution = HashMap<TypeVar, Type>;
+pub type TypeEnv = HashMap<String, Scheme>;
+
+#[derive(Debug, Clone)]
 pub enum Type {
+    Var(TypeVar),
     Const(TypeConst),
-    App(Box<Type>, Vec<Type>),
-    Arrow(Vec<Type>, Box<Type>),
-    Var(Box<TypeVar>)
+    Function(Vec<Type>, Box<Type>)
 }
 
-#[derive(Debug, PartialEq, Clone)]
-pub enum TypeVar {
-    Unbound(i32, i32),
-    Linked(Type),
-    Generic(i32)
-}
-
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum TypeConst {
     Int,
     Bool,
     String,
     Float,
     Unit,
-    TypeDef(String)
+    Custom(String)
 }
 
-impl fmt::Display for TypeConst {
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        match *self {
-            TypeConst::Int => write!(fmt, "int"),
-            TypeConst::Bool => write!(fmt, "bool"),
-            TypeConst::String => write!(fmt, "string"),
-            TypeConst::Float => write!(fmt, "float"),
-            TypeConst::Unit => write!(fmt, "unit"),
-            TypeConst::TypeDef(ref s) => write!(fmt, "{}", s)
+#[derive(Debug, Clone)]
+pub struct Scheme {
+    pub vars: Vec<TypeVar>,
+    pub ty: Type
+}
+
+static NEXT_ID: AtomicIsize = ATOMIC_ISIZE_INIT;
+
+fn get_next_id() -> i32 {
+    NEXT_ID.fetch_add(1, Ordering::Relaxed) as i32
+}
+
+pub fn new_var() -> Type {
+    Type::Var(get_next_id())
+}
+
+
+fn singleton_set<T: Eq + Hash>(elem: T) -> HashSet<T> {
+    let mut set = HashSet::new();
+    set.insert(elem);
+    set
+}
+
+pub trait Types {
+    fn free_type_variables(&self) -> HashSet<TypeVar>;
+    fn apply_subst(&mut self, subst: &Substitution);
+}
+
+impl Types for Type {
+    fn free_type_variables(&self) -> HashSet<TypeVar> {
+        match self {
+            &Type::Var(v) => singleton_set(v),
+            &Type::Const(_) => HashSet::new(),
+            &Type::Function(ref params, ref ret) => params.free_type_variables()
+                .union(&ret.free_type_variables())
+                .cloned()
+                .collect()
         }
+    }
+
+    fn apply_subst(&mut self, subst: &Substitution) {
+        match self {
+            &mut Type::Var(v) => match subst.get(&v) {
+                Some(t) => {
+                    *self = t.clone()
+                },
+                None => {}
+            },
+            &mut Type::Function(ref mut params, ref mut ret) => {
+                params.apply_subst(subst);
+                ret.apply_subst(subst);
+            }
+            _ => {}
+        }
+    }
+}
+
+impl<T: Types> Types for Vec<T> {
+    fn free_type_variables(&self) -> HashSet<TypeVar> {
+        self.iter()
+            .fold(HashSet::new(), |s, t| {
+                s.union(&t.free_type_variables())
+                    .cloned()
+                    .collect()
+            })
+    }
+
+    fn apply_subst(&mut self, subst: &Substitution) {
+        for ty in self.iter_mut() {
+            ty.apply_subst(subst);
+        }
+    }
+}
+
+impl Types for Scheme {
+    fn free_type_variables(&self) -> HashSet<TypeVar> {
+        let substituted_types : HashSet<_> = self.vars.iter()
+            .cloned()
+            .collect();
+        self.ty.free_type_variables()
+            .difference(&substituted_types)
+            .cloned()
+            .collect()
+    }
+
+    fn apply_subst(&mut self, subst: &Substitution) {
+        let mut new_subst = subst.clone();
+        for var in &self.vars {
+            new_subst.remove(var);
+        }
+        self.ty.apply_subst(&new_subst);
+    }
+}
+
+impl Types for TypeEnv {
+    fn free_type_variables(&self) -> HashSet<TypeVar> {
+        let types: Vec<_> = self.values()
+            .cloned()
+            .collect();
+        types.free_type_variables()
+    }
+
+    fn apply_subst(&mut self, subst: &Substitution) {
+        for (_, ty) in self.iter_mut() {
+            ty.apply_subst(subst);
+        }
+    }
+}
+
+pub fn empty_subst() -> Substitution {
+    HashMap::new()
+}
+
+pub fn compose_subst(a: &Substitution, b: &Substitution) -> Substitution {
+    let mut cloned_a = a.clone();
+    for (_, value) in cloned_a.iter_mut() {
+        value.apply_subst(a);
+    }
+    for (key, value) in b.iter() {
+        cloned_a.entry(*key).or_insert(value.clone());
+    }
+    cloned_a
+}
+
+pub fn instantiate(scheme: &mut Scheme) {
+    let mut subst = HashMap::new();
+    for var in scheme.vars.iter() {
+        subst.insert(*var, Type::Var(*var));
+    }
+    scheme.ty.apply_subst(&subst);
+}
+
+pub fn unify(ty1: &Type, ty2: &Type) -> Result<Substitution, String> {
+    match (ty1, ty2) {
+        (&Type::Function(ref param1, ref ret1),
+         &Type::Function(ref param2, ref ret2)) => {
+            let subst1 = try!(unify_params(param1, param2));
+            let subst2 = try!(unify(ret1, ret2));
+            Ok(compose_subst(&subst1, &subst2))
+        },
+        (&Type::Var(v), ref t) => var_bind(v, t),
+        (ref t, &Type::Var(v)) => var_bind(v, t),
+        (&Type::Const(ref const_a),
+         &Type::Const(ref const_b)) if const_a == const_b => Ok(empty_subst()),
+        (_, _) => Err(format!("failed to unify type `{}` with type `{}`",
+                              ty1, ty2))
+    }
+}
+
+fn unify_params(params1: &[Type], params2: &[Type]) -> Result<Substitution, String> {
+    if params1.len() != params2.len() {
+        return Err("failed to unify, incorrect number of params"
+                   .to_string());
+    }
+    let mut subst = empty_subst();
+    for (p1, p2) in params1.iter().zip(params2.iter()) {
+        let unifying_subst = try!(unify(p1, p2));
+        subst = compose_subst(&subst, &unifying_subst)
+    }
+    Ok(subst)
+}
+
+pub fn generalize(env: &TypeEnv, ty: &Type) -> Scheme {
+    let actual_vars : Vec<_> = ty.free_type_variables()
+        .difference(&env.free_type_variables())
+        .cloned()
+        .collect();
+    Scheme {
+        vars: actual_vars,
+        ty: ty.clone()
+    }
+}
+
+pub fn var_bind(var: TypeVar, ty: &Type) -> Result<Substitution, String> {
+    if let &Type::Var(u) = ty {
+        if u == var {
+            Ok(empty_subst())
+        } else {
+            let mut subst = HashMap::new();
+            subst.insert(var, ty.clone());
+            Ok(subst)
+        }
+    } else if ty.free_type_variables().contains(&var) {
+        Err("occurs check failure".to_string())
+    } else {
+        let mut subst = HashMap::new();
+        subst.insert(var, ty.clone());
+        Ok(subst)
     }
 }
 
 impl fmt::Display for Type {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        let mut names = HashMap::new();
-        let mut count = 0;
-        fn new_name(count: &mut u8) -> String {
-            let cur = *count;
-            if cur == 255 {
-                return "<more than 255 type variables >:(>".to_string();
-            }
-            *count += 1;
-            let overflow = (cur / 25) as u8;
-            if overflow == 0 {
-                // just use one char as a type variable
-                let mut s = String::new();
-                s.push('\'');
-                s.push((cur + 97) as char);
-                s
-            } else {
-                // otherwise we need to use a couple chars
-                if overflow > 25 {
-                }
-                let mut s = String::new();
-                s.push('\'');
-                s.push((overflow + 97) as char);
-                s.push(((cur % 25) + 97) as char);
-                s
-            }
-        }
         match self {
-            &Type::Const(ref typeconst) => write!(fmt, "{}", typeconst),
-            &Type::App(ref base, ref params) => {
-                try!(write!(fmt, "{}", base));
-                try!(write!(fmt, "["));
-                let mut first = true;
-                for ref p in params {
-                    if !first {
-                        try!(write!(fmt, ", "));
-                    } else {
-                        first = false;
-                    }
-                    try!(write!(fmt, "{}", p));
-                }
-                write!(fmt, "]")
+            &Type::Const(ref typeconst) => match typeconst {
+                &TypeConst::Int => write!(fmt, "int"),
+                &TypeConst::Bool => write!(fmt, "bool"),
+                &TypeConst::String => write!(fmt, "string"),
+                &TypeConst::Float => write!(fmt, "float"),
+                &TypeConst::Unit => write!(fmt, "unit"),
+                &TypeConst::Custom(ref s) => write!(fmt, "{}", s)
             },
-            &Type::Arrow(ref params, ref ret) => {
+            &Type::Function(ref params, ref ret) => {
                 if params.len() == 1 {
-                    write!(fmt, "{} -> {}", params[0], ret)
+                    if let &Type::Function(_, _) = &params[0] {
+                        write!(fmt, "({}) -> {}", params[0], ret)
+                    } else {
+                        write!(fmt, "{} -> {}", params[0], ret)
+                    }
                 } else {
                     try!(write!(fmt, "("));
                     let mut first = true;
@@ -101,181 +247,16 @@ impl fmt::Display for Type {
                     write!(fmt, ") -> {}", ret)
                 }
             },
-            &Type::Var(box TypeVar::Linked(ref ty)) => write!(fmt, "{}", ty),
-            &Type::Var(box TypeVar::Unbound(id, _)) => write!(fmt, "_{}", id),
-            &Type::Var(box TypeVar::Generic(id)) => {
-                let s = names.entry(id).or_insert(new_name(&mut count));
+            &Type::Var(num) => {
+                let mut s = String::new();
+                if num / 25 > 1 {
+                    for _ in (1..num/25) {
+                        s.push('\'');
+                    }
+                }
+                s.push(((num as u8 % 25u8) + 97u8) as char);
                 write!(fmt, "{}", s)
             }
         }
     }
-}
-
-static NEXT_ID: AtomicIsize = ATOMIC_ISIZE_INIT;
-
-fn get_next_id() -> i32 {
-    NEXT_ID.fetch_add(1, Ordering::Relaxed) as i32
-}
-
-pub fn new_var(level: i32) -> Type {
-    Type::Var(Box::new(TypeVar::Unbound(get_next_id(), level)))
-}
-
-pub fn unify(left: &mut Type, right: &mut Type) -> Result<(), String> {
-    // trivial primitive unification. Int unifies with Int, String with String, etc.
-    if left == right {
-        return Ok(());
-    }
-
-    match (left, right) {
-        // the trivial unification - any constant type unifies with any other constant type
-        // with the same name.
-        (&mut Type::Const(TypeConst::TypeDef(ref s)),
-         &mut Type::Const(TypeConst::TypeDef(ref d))) if s == d => Ok(()),
-        // unification of type applications. Two type applications such as list[a] and list[b]
-        // are unified by first unifying their base types (i.e. list with list) and then unifying
-        // their parameters (i.e. a with b). It is an error to unify two type applications if they
-        // utilize a different number of type parameters.
-        (&mut Type::App(ref mut ty1, ref mut ty1parms),
-         &mut Type::App(ref mut ty2, ref mut ty2parms)) => {
-             let _ = try!(unify(ty1, ty2));
-             if ty1parms.len() != ty2parms.len() {
-                 return Err(format!("unexpected number of type parameters: expected {}, got {}", ty1parms.len(), ty2parms.len()))
-             }
-            for (ref mut p1, ref mut p2) in ty1parms.iter_mut().zip(ty2parms) {
-                let _ = try!(unify(p1, p2));
-            }
-            Ok(())
-        },
-        // unification of function types. Functions are unified by first unifying their arguments and then
-        // unifying their return type.
-        (&mut Type::Arrow(ref mut ty1params, ref mut retty1),
-         &mut Type::Arrow(ref mut ty2params, ref mut retty2)) => {
-            if ty1params.len() != ty2params.len() {
-                return Err(format!("unexpected number of parameters: expected {}, got {}", ty1params.len(), ty2params.len()))
-            }
-            for (ref mut p1, ref mut p2) in ty1params.iter_mut().zip(ty2params) {
-                let _ = try!(unify(p1, p2));
-            }
-            let _ = try!(unify(retty1, retty2));
-            Ok(())
-        },
-        // unification of linked type variables with another type by unifing
-        // the type variable's linked type wth the given type.
-        (&mut Type::Var(box TypeVar::Linked(ref mut ty1)), ref mut ty2) => {
-            let _ = try!(unify(ty1, ty2));
-            Ok(())
-        },
-        (ref mut ty1, &mut Type::Var(box TypeVar::Linked(ref mut ty2))) => {
-            let _ = try!(unify(ty1, ty2));
-            Ok(())
-        },
-        // sanity check to ensure that the index of an unbount type variable is unique.
-        (&mut Type::Var(box TypeVar::Unbound(id1, _)),
-         &mut Type::Var(box TypeVar::Unbound(id2, _))) if id1 == id2 => {
-            panic!("should be exactly one instance of type variable")
-        },
-        // unification of an unbound type variable with a concrete type.
-        // We change the unbound type variable to a "linked" type variable
-        // that is linked to a specific type. This unification involes an occurs
-        // check to avoid unifying any type variable with a structure that contains
-        // that type variable. This is particularly important as this step could
-        // otherwise allow the unification of a type variable 'a and a function
-        // 'a -> 'b, which would result in an infinite type and general unsoundness
-        // of the type system.
-        (&mut Type::Var(ref mut v @ box TypeVar::Unbound(_, _)), ref mut ty) => {
-            if let box TypeVar::Unbound(id, level) = *v {
-                let _ = try!(occurs_check(id, level, ty));
-            } else {
-                unreachable!()
-            }
-            *v = Box::new(TypeVar::Linked(ty.clone()));
-            Ok(())
-        },
-        (ref mut ty, &mut Type::Var(ref mut v @ box TypeVar::Unbound(_, _))) => {
-            if let box TypeVar::Unbound(id, level) = *v {
-                let _ = try!(occurs_check(id, level, ty));
-            } else {
-                unreachable!()
-            }
-            *v = Box::new(TypeVar::Linked(ty.clone()));
-            Ok(())
-        }
-        // everything else is an error.
-        _ => Err(format!("failed to unify"))
-    }
-}
-
-pub fn occurs_check(id: i32, level: i32, ty: &mut Type) -> Result<(), String> {
-    match ty {
-        &mut Type::Var(box TypeVar::Linked(ref mut ty)) => occurs_check(id, level, ty),
-        &mut Type::Var(box TypeVar::Generic(_)) => unreachable!(),
-        &mut Type::Var(ref mut v @ box TypeVar::Unbound(_, _)) => {
-            let (other_id, other_level) = if let box TypeVar::Unbound(i, l) = *v {
-                (i, l)
-            } else {
-                unreachable!()
-            };
-            if other_id == id {
-                // this is an infinite type.
-                return Err(format!("occurs check failure"));
-            }
-            if other_level > level {
-                *v = Box::new(TypeVar::Unbound(other_id, level));
-            }
-            Ok(())
-        },
-        &mut Type::App(ref mut ty, ref mut args) => {
-            let _ = try!(occurs_check(id, level, ty));
-            for ref mut p_ty in args.iter_mut() {
-                let _ = try!(occurs_check(id, level, p_ty));
-            }
-            Ok(())
-        },
-        &mut Type::Arrow(ref mut args, ref mut ty) => {
-            for ref mut p_ty in args.iter_mut() {
-                let _ = try!(occurs_check(id, level, p_ty));
-            }
-            let _ = try!(occurs_check(id, level, ty));
-            Ok(())
-        },
-        &mut Type::Const(_) => Ok(())
-    }
-}
-
-pub fn generalize(level: i32, ty: &mut Type) -> Type {
-    match ty {
-        &mut Type::Var(box TypeVar::Unbound(id, other_level)) if other_level > level => {
-            Type::Var(Box::new(TypeVar::Generic(id)))
-        }
-        &mut Type::App(ref mut base, ref mut args) => {
-            Type::App(Box::new(generalize(level, base)),
-                      args.iter_mut().map(|x| generalize(level, x)).collect())
-        },
-        &mut Type::Arrow(ref mut args, ref mut retty) => {
-            Type::Arrow(args.iter_mut().map(|x| generalize(level, x)).collect(),
-                        Box::new(generalize(level, retty)))
-        },
-        &mut Type::Var(box TypeVar::Linked(ref mut link_ty)) => generalize(level, link_ty),
-        &mut Type::Var(box TypeVar::Generic(_)) |
-        &mut Type::Var(box TypeVar::Unbound(_, _)) |
-        &mut Type::Const(_) => ty.clone()
-    }
-}
-
-pub fn instantiate(level: i32, ty: &mut Type) -> Type {
-    let mut table = HashMap::new();
-    fn instantiate_rec(map: &mut HashMap<i32, Type>, level: i32, ty: &mut Type) -> Type {
-        match ty {
-            &mut Type::Const(_) => ty.clone(),
-            &mut Type::Var(box TypeVar::Linked(ref mut link_ty)) => instantiate_rec(map, level, link_ty),
-            &mut Type::Var(box TypeVar::Generic(id)) => map.entry(id).or_insert(new_var(level)).clone(),
-            &mut Type::Var(box TypeVar::Unbound(_, _)) => ty.clone(),
-            &mut Type::App(ref mut basety, ref mut args) => Type::App(Box::new(instantiate(level, basety)),
-                                                                      args.iter_mut().map(|x| instantiate(level, x)).collect()),
-            &mut Type::Arrow(ref mut args, ref mut retty) => Type::Arrow(args.iter_mut().map(|x| instantiate(level, x)).collect(),
-                                                                         Box::new(instantiate(level, retty)))
-        }
-    }
-    instantiate_rec(&mut table, level, ty)
 }

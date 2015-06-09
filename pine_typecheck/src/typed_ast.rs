@@ -1,6 +1,6 @@
 use types::Type;
 
-#[derive(PartialEq, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct TypedFunction {
     pub return_type: Type,
     pub parameter_types: Vec<Type>,
@@ -9,7 +9,7 @@ pub struct TypedFunction {
     pub body: TypedExpression
 }
 
-#[derive(PartialEq, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct Typed<T> {
     pub ty: Type,
     pub data: T
@@ -17,29 +17,29 @@ pub struct Typed<T> {
 
 pub type TypedExpression = Typed<Expression>;
 
-#[derive(PartialEq, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub enum Expression {
     Literal(TypedLiteral),
     Identifier(TypedIdentifier),
     Ref(Box<TypedExpression>),
-    IfThenElse(Box<TypedExpression>, Box<TypedExpression>, Box<Option<TypedExpression>>),
+    IfThenElse(Box<TypedExpression>, Box<TypedExpression>, Option<Box<TypedExpression>>),
     FunctionCall(Box<TypedExpression>, Vec<TypedExpression>),
-    Let(TypedPattern, Box<TypedExpression>, Box<TypedExpression>),
+    Let(Pattern, Box<TypedExpression>, Box<TypedExpression>),
     Assign(Box<TypedExpression>, Box<TypedExpression>),
-    BinaryOperator(Box<TypedExpression>, Box<TypedExpression>, TypedBinop),
-    UnaryOperator(Box<TypedExpression>, TypedUnop),
+    BinaryOperator(Box<TypedExpression>, Box<TypedExpression>, Binop),
+    UnaryOperator(Box<TypedExpression>, Unop),
     TupleCreation(Vec<TypedExpression>),
     Paren(Box<TypedExpression>)
 }
 
 pub type TypedBlock = Typed<Block>;
 
-#[derive(PartialEq, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct Block(pub Option<TypedExpression>);
 
 pub type TypedLiteral = Typed<Literal>;
 
-#[derive(PartialEq, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub enum Literal {
     Int(i32),
     Bool(bool),
@@ -49,37 +49,33 @@ pub enum Literal {
 
 pub type TypedIdentifier = Typed<String>;
 
-pub type TypedPattern = Typed<Pattern>;
-
-#[derive(PartialEq, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub enum Pattern {
-    Ident(TypedIdentifier),
-    TupleDestructure(Vec<TypedIdentifier>)
+    Ident(String),
+    TupleDestructure(Vec<String>)
 }
 
 
-pub type TypedBinop = Typed<Binop>;
-#[derive(PartialEq, Clone, Debug, Copy)]
+#[derive(Clone, Debug, Copy)]
 pub enum Binop {
     IntegerPlus,
     IntegerMinus,
     IntegerMul,
     IntegerDiv,
-    IntegerEq,
-    IntegerNeq,
     IntegerGeq,
     IntegerLeq,
     IntegerLT,
     IntegerGT,
+    PointerEq,
+    PointerNeq,
     BooleanAnd,
     BooleanOr
 }
 
 pub type TypedUnop = Typed<Unop>;
-#[derive(PartialEq, Clone, Debug, Copy)]
+#[derive(Clone, Debug, Copy)]
 pub enum Unop {
     PointerDereference,
     BooleanNot,
     IntegerNegate,
-    FloatNegate
 }
