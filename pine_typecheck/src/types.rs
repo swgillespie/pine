@@ -7,7 +7,7 @@ pub type TypeVar = i32;
 pub type Substitution = HashMap<TypeVar, Type>;
 pub type TypeEnv = HashMap<String, Scheme>;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Type {
     Var(TypeVar),
     Const(TypeConst),
@@ -40,6 +40,9 @@ pub fn new_var() -> Type {
     Type::Var(get_next_id())
 }
 
+pub fn reset_type_vars() {
+    NEXT_ID.store(0, Ordering::Relaxed);
+}
 
 fn singleton_set<T: Eq + Hash>(elem: T) -> HashSet<T> {
     let mut set = HashSet::new();
@@ -160,6 +163,7 @@ pub fn unify(ty1: &Type, ty2: &Type) -> Result<Substitution, String> {
     match (ty1, ty2) {
         (&Type::Function(ref param1, ref ret1),
          &Type::Function(ref param2, ref ret2)) => {
+            info!(target: "unify", "unifying function types `{}` and `{}`", ty1, ty2);
             let subst1 = try!(unify_params(param1, param2));
             let subst2 = try!(unify(ret1, ret2));
             Ok(compose_subst(&subst1, &subst2))
@@ -180,7 +184,17 @@ fn unify_params(params1: &[Type], params2: &[Type]) -> Result<Substitution, Stri
     }
     let mut subst = empty_subst();
     for (p1, p2) in params1.iter().zip(params2.iter()) {
+        info!(target: "unify", "unifying function parameters `{}` and `{}`", p1, p2);
         let unifying_subst = try!(unify(p1, p2));
+        // we have to be sure that two parameters don't cause conflicting substitutions.
+        for (key, value) in unifying_subst.iter() {
+            match subst.get(key) {
+                Some(other_value) if value != other_value => return Err(format!("parameters cause conflicting requirements \
+                                                                                   on type variable. Cannot unify `{}` and `{}`",
+                                                                                  other_value, value)),
+                _ => {}
+            }
+        }
         subst = compose_subst(&subst, &unifying_subst)
     }
     Ok(subst)
@@ -234,7 +248,7 @@ impl fmt::Display for Type {
                         write!(fmt, "{} -> {}", params[0], ret)
                     }
                 } else {
-                    try!(write!(fmt, "("));
+                    try!(write!(fmt, "["));
                     let mut first = true;
                     for ref p in params {
                         if !first {
@@ -244,7 +258,7 @@ impl fmt::Display for Type {
                         }
                         try!(write!(fmt, "{}", p));
                     }
-                    write!(fmt, ") -> {}", ret)
+                    write!(fmt, "] -> {}", ret)
                 }
             },
             &Type::Var(num) => {

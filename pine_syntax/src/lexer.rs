@@ -1,3 +1,34 @@
+//! The "lexer" module provides a token stream for Pine programs.
+//! The chief exports of this module are token definitions and the Lexer
+//! struct, which is an iterator that yields Pine tokens.
+//!
+//! ## Tokens
+//! Tokens are the building blocks upon which the parser builds an
+//! abstract syntax tree. A token represents a single syntactical
+//! item within the language - a left parenthesis, an integer literal,
+//! the `def` keyword, and so on. The `Token` struct (and `TokenType` enum)
+//! together represent the tokens that the lexer generates, and that the parser
+//! ultimately consumes.
+//!
+//! A token consists of a span and a variant. The span indicates the position
+//! of the token in the source file - it is composed of both a start position
+//! and a stop position, each of which are composed of a column and a line number.
+//! The variant is a member of the TokenType enum that indicates which type of token
+//! this token is and, if applicable, contains some data as to what the token represents.
+//! This is used for literals and identifiers, which contain the scanned value of the data
+//! type that each represents.
+//!
+//! ## The Lexer
+//! The lexer is a glorified state machine, where each function roughly corresponds to a state.
+//! This state machine is exposed as the Lexer struct, which exposes no public methods but instead
+//! implements the Iterator trait. Every call to `next` runs the state machine on the input until
+//! it reaches an accept state, reaches an EOF, or has some other sort of error. `next` returns
+//! either a Token upon success, or a CompileDiagnostic on failure. The parser is expected to
+//! abort parsing immediately if it encounters a lexer error in this way.
+//!
+//! ## Lexical specification
+//! There is no official lexical specification for Pine yet, but when I have solidified the syntax
+//! of Pine more I will add one here.
 use pine_common::{Span, CompileDiagnostic, Position, Severity};
 
 use std::iter::Peekable;
@@ -94,6 +125,9 @@ pub enum TokenType {
     Or
 }
 
+/// The Lexer struct wraps an iterator of chars to provide an iterator
+/// over Pine tokens. It implements the Iterator trait itself as an entry
+/// point to the Lexer state machine.
 pub struct Lexer<I: Iterator<Item=char>> {
     filename: String,
     iter: Peekable<I>,
@@ -107,7 +141,18 @@ impl<I: Iterator<Item=char>> Iterator for Lexer<I> {
         if let None = self.iter.peek() {
             None
         } else {
-            self.skip_to_next_non_whitespace_char();
+            loop {
+                // TODO this is not particularly effective
+                self.skip_to_next_non_whitespace_char();
+                self.skip_comments();
+                if let Some(c) = self.iter.peek() {
+                    if !c.is_whitespace() {
+                        break;
+                    }
+                } else {
+                    break;
+                }
+            }
             if let None = self.iter.peek() {
                 None
             } else {
@@ -143,6 +188,24 @@ impl<I: Iterator<Item=char>> Lexer<I> {
             } else {
                 self.current_position.1 += 1;
             }
+        }
+    }
+
+    fn skip_comments(&mut self) {
+        match self.iter.peek() {
+            Some(&'#') => loop {
+                match self.iter.next() {
+                    Some('\n') => {
+                        self.current_position.0 += 1;
+                        self.current_position.1 = 0;
+                    }
+                    Some(_) => {
+                        self.current_position.1 += 1;
+                    },
+                    None => break
+                }
+            },
+            _ => {}
         }
     }
 

@@ -38,6 +38,7 @@ impl TypeBinder {
 
 impl TypeBinder {
     pub fn visit_function<'ast>(&mut self, func: &'ast ast::Function) -> Result<Bound<typed::TypedFunction>, CompileDiagnostic> {
+        info!(target: "type-inference", "beginning type inference for `{}`", func.name.data);
         let saved_env = self.env.clone();
         let param_names : Vec<_> = func.parameters.iter()
             .map(|x| x.data.clone())
@@ -55,6 +56,7 @@ impl TypeBinder {
         });
 
         let (ref s1, ref t1) = try!(self.visit_body(&func.body));
+        info!(target: "type-inference", "return type `{}` inferred for function `{}`", t1.ty, func.name.data);
 
         // at this point, we have inferred constraints for each one of the parameters here.
         // ultimately, the types of the parameters to this function are the type variables
@@ -70,24 +72,32 @@ impl TypeBinder {
         // we also need to infer the type of the function itself by unifying the type variable
         // we made earlier with the type we just inferred.
         let inferred_type = Type::Function(param_types.clone(), Box::new(t1.ty.clone()));
-
+        info!(target: "type-inference", "complete type `{}` inferred for function `{}`", inferred_type, func.name.data);
 
         let mut type_var = self.env.get(&func.name.data).unwrap().clone();
         types::instantiate(&mut type_var);
         type_var.apply_subst(s1);
 
+        info!(target: "type-inference", "inferred type `{}` for recursive invocations of function `{}`", type_var.ty, func.name.data);
         let s2 = try!(self.unify_with_span(&func.name, &inferred_type, &type_var.ty));
 
         let unifying_subst = compose_subst(&s2, &s1);
+        let mut ret_ty = t1.ty.clone();
+        ret_ty.apply_subst(&unifying_subst);
+        param_types.apply_subst(&unifying_subst);
         // if that was successful, then our function is well-typed.
         let function = typed::TypedFunction {
-            return_type: t1.ty.clone(),
+            return_type: ret_ty,
             parameter_types: param_types,
             name: func.name.data.clone(),
             parameter_names: param_names,
             body: t1.clone()
         };
         self.env = saved_env;
+
+        let generalized_fun_type = types::generalize(&self.env, &inferred_type);
+        self.env.insert(func.name.data.clone(), generalized_fun_type);
+        //types::reset_type_vars();
         Ok(((unifying_subst, function)))
     }
 
@@ -152,6 +162,7 @@ impl TypeBinder {
             Some(scheme) => {
                 let mut instantiated = scheme.clone();
                 types::instantiate(&mut instantiated);
+                info!(target: "type-inference", "instantiated `{}` type for identifier `{}`", instantiated.ty, ident.data);
                 let ident = Typed {
                     ty: instantiated.ty.clone(),
                     data: typed::Expression::Identifier(Typed {
@@ -247,21 +258,28 @@ impl TypeBinder {
         let saved_env = self.env.clone();
         let (ref s1, ref t1) = try!(self.visit_expression(func));
         self.env.apply_subst(s1);
+        info!(target: "type-inference", "function-expression inferred type `{}`", t1.ty);
+
 
         let mut typed_params = vec![];
         let mut arg_substs = s1.clone();
         for arg in args {
             let (ref sn, ref tn) = try!(self.visit_expression(arg));
             self.env.apply_subst(sn);
+            info!(target: "type-inference", "inferred type `{}` for parameter", tn.ty);
+            info!(target: "type-inference", "unifying subst for parameter: `{:?}`", sn);
             arg_substs = compose_subst(sn, &arg_substs);
             typed_params.push(tn.clone());
         }
         self.env = saved_env;
 
         let called_type = Type::Function(typed_params.iter().map(|t| t.ty.clone()).collect(), Box::new(new_var.clone()));
+        info!(target: "type-inference", "signature of called function: `{}` vs. actual type: `{}`", called_type, t1.ty);
 
-        let s2 = try!(self.unify_with_span(func, &t1.ty, &called_type));
+        let s2 = try!(self.unify_with_span(func, &called_type, &t1.ty));
         new_var.apply_subst(&s2);
+        info!(target: "type-inference", "unifying function call substitution: `{:?}`", s2);
+        info!(target: "type-inference", "substituted return type: `{}`", new_var);
 
         let subst = compose_subst(&s2, &compose_subst(&arg_substs, &s1));
         Ok((subst,

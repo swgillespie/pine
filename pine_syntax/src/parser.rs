@@ -1,3 +1,24 @@
+//! The "parser" module provides a parser for Pine programs.
+//! The parser's job is turning a stream of Tokens (obtained from the lexer module)
+//! into an abstract syntax tree (or an error). It does this by utilizing the Lexer
+//! struct provided by lexer and utilizing it as an iterator.
+//!
+//! ## Grammar
+//! The grammar that this parser recognizes has not been published yet (as it is in active development),
+//! but I am maintaining an ANTLR4 grammar in parallel with this parser that I will publish alongside
+//! this source code whenever I have stabilized the grammar somewhat.
+//!
+//! Each function in the parser roughly corresponds to a production in the grammar, and some of them
+//! are documented explicitly with their productions. I will work on expanding the docs as I go.
+//!
+//! ## The Parser
+//! The parser itself is a recursive-descent parser that utilizes one token of lookahead.
+//! The lookahead is provided by the Peekable struct wrapped around the lexer, used with
+//! the `next_token_one_of` macro. Care has been taken to ensure that this grammar remains LL(1)
+//! for ease of parsing.
+//!
+//! The parser maintains three entry points: `compilation_unit`, `function`, and `expression`.
+//! Each one parses multiple functions, a single function, and a single expression respectively.
 use pine_common::{CompileDiagnostic, Position, Span, Severity};
 
 use lexer::{Lexer, TokenType, Token};

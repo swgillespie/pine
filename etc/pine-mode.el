@@ -7,7 +7,7 @@
 (define-generic-mode
   'pine-mode
   ;; comments
-  '(";;")
+  '("#")
   ;; keywords
   '("def" "ref" "if" "then" "else" "end"
     "do" "let" "in" "and" "or" "not")
