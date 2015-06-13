@@ -1,3 +1,5 @@
+use rustc_serialize::{Encodable, Encoder};
+
 use std::hash::Hash;
 use std::collections::{HashSet, HashMap};
 use std::sync::atomic::{AtomicIsize, ATOMIC_ISIZE_INIT, Ordering};
@@ -7,14 +9,28 @@ pub type TypeVar = i32;
 pub type Substitution = HashMap<TypeVar, Type>;
 pub type TypeEnv = HashMap<String, Scheme>;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, RustcEncodable)]
 pub enum Type {
     Var(TypeVar),
     Const(TypeConst),
     Function(Vec<Type>, Box<Type>)
 }
 
-#[derive(Debug, Clone, PartialEq)]
+/*
+impl Encodable for Type {
+    fn encode<S: Encoder>(&self, s: &mut S) -> Result<(), S::Error> {
+        match *self {
+            Type::Var(v) => v.encode(s),
+            Type::Const(ref c) => c.encode(s),
+            Type::Function(ref params, ref ret) => {
+                try!(params.encode(s));
+                ret.encode(s)
+            }
+        }
+    }
+}*/
+
+#[derive(Debug, Clone, PartialEq, RustcEncodable)]
 pub enum TypeConst {
     Int,
     Bool,

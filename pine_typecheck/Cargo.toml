@@ -11,3 +11,4 @@ path = "../pine_syntax"
 
 [dependencies]
 log = "0.3.1"
+rustc-serialize = "0.3.14"

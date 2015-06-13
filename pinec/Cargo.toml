@@ -12,6 +12,9 @@ path = "../pine_syntax"
 [dependencies.pine_typecheck]
 path = "../pine_typecheck"
 
+[dependencies.pine_trans]
+path = "../pine_trans"
+
 [dependencies]
 rustc-serialize = "0.3.14"
 env_logger = "0.3.1"

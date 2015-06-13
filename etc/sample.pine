@@ -1,7 +1,3 @@
-def fix f do
-    f(fix(f))
-end
-
 def apply f, x do
     f(x)
 end
@@ -10,16 +6,7 @@ def add_one n do
     n + 1
 end
 
-def higher_order_function n do
-    apply(add_one, n)
+def main do
+    apply(add_one, 5)
 end
 
-def factorial n do
-    if n == 0 then 1
-    else n * factorial(n - 1) end
-end
-
-def fibonacci n do
-    if n == 0 or n == 1 then 1
-    else factorial(n - 2) * factorial(n - 1) end
-end

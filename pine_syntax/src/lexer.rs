@@ -93,6 +93,7 @@ pub enum TokenType {
     FloatLiteral(f32),
     Identifier(String),
     StringLiteral(String),
+    UnitLiteral,
     Def,
     Comma,
     Ref,
@@ -433,6 +434,7 @@ fn extract_keyword(string: &str) -> Option<TokenType> {
         "false" => Some(BooleanLiteral(false)),
         "and" => Some(And),
         "or" => Some(Or),
+        "unit" => Some(UnitLiteral),
         _ => None
     }
 }

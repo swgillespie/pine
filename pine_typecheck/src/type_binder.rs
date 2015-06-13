@@ -148,6 +148,10 @@ impl TypeBinder {
             ast::Literal::String(ref s) => typed::Typed {
                 ty: Type::Const(TypeConst::String),
                 data: typed::Literal::String(s.clone())
+            },
+            ast::Literal::Unit => typed::Typed {
+                ty: Type::Const(TypeConst::Unit),
+                data: typed::Literal::Unit
             }
         };
         Ok((types::empty_subst(), Typed {

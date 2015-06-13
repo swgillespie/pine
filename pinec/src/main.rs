@@ -1,6 +1,7 @@
 extern crate pine_common;
 extern crate pine_syntax;
 extern crate pine_typecheck;
+extern crate pine_trans;
 extern crate rustc_serialize;
 extern crate env_logger;
 extern crate getopts;

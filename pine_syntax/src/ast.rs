@@ -43,7 +43,8 @@ pub enum Literal {
     Int(i32),
     Bool(bool),
     Float(f32),
-    String(String)
+    String(String),
+    Unit
 }
 
 #[derive(PartialEq, Debug, Clone, Copy, RustcEncodable)]

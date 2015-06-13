@@ -237,7 +237,8 @@ impl<I: Iterator<Item=char>> Parser<I> {
                                   BooleanLiteral(_),
                                   IntLiteral(_),
                                   FloatLiteral(_),
-                                  StringLiteral(_)) {
+                                  StringLiteral(_),
+                                  UnitLiteral) {
                 let literal = try!(self.literal());
                 Spanned {
                     span: literal.span,
@@ -329,6 +330,13 @@ impl<I: Iterator<Item=char>> Parser<I> {
                     data: Literal::String(l.clone())
                 })
             },
+            Token { variant: UnitLiteral, span: s} => {
+                self.last_span = s;
+                Ok(Spanned {
+                    span: s,
+                    data: Literal::Unit
+                })
+            }
             _ => unreachable!()
         }
     }

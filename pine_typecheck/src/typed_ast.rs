@@ -1,9 +1,11 @@
+use rustc_serialize::{Encodable, Encoder};
+
 use std::collections::HashSet;
 use types::{Type, Types, Substitution, TypeVar};
 
 pub type TypedCompilationUnit = Vec<TypedFunction>;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, RustcEncodable)]
 pub struct TypedFunction {
     pub return_type: Type,
     pub parameter_types: Vec<Type>,
@@ -12,15 +14,41 @@ pub struct TypedFunction {
     pub body: TypedExpression
 }
 
-#[derive(Clone, Debug)]
-pub struct Typed<T> {
+impl Types for TypedFunction {
+    fn free_type_variables(&self) -> HashSet<TypeVar> {
+        self.return_type.free_type_variables()
+            .union(&self.parameter_types.free_type_variables()
+                   .union(&self.body.free_type_variables())
+                   .cloned()
+                   .collect())
+            .cloned()
+            .collect()
+    }
+
+    fn apply_subst(&mut self, subst: &Substitution) {
+        self.return_type.apply_subst(subst);
+        self.parameter_types.apply_subst(subst);
+        self.body.apply_subst(subst);
+    }
+}
+
+#[derive(Clone, Debug, RustcEncodable)]
+pub struct Typed<T: Encodable> {
     pub ty: Type,
     pub data: T
 }
 
+/*
+impl<T: Encodable> Encodable for Typed<T> {
+    fn encode<S: Encoder>(&self, s: &mut S) -> Result<(), S::Error> {
+        try!(self.ty.encode(s));
+        self.data.encode(s)
+    }
+}*/
+
 pub type TypedExpression = Typed<Expression>;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, RustcEncodable)]
 pub enum Expression {
     Literal(TypedLiteral),
     Identifier(TypedIdentifier),
@@ -130,17 +158,18 @@ impl Types for TypedExpression {
 
 pub type TypedBlock = Typed<Block>;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, RustcEncodable)]
 pub struct Block(pub Option<TypedExpression>);
 
 pub type TypedLiteral = Typed<Literal>;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, RustcEncodable)]
 pub enum Literal {
     Int(i32),
     Bool(bool),
     Float(f32),
-    String(String)
+    String(String),
+    Unit
 }
 
 impl Types for TypedLiteral {
@@ -165,13 +194,13 @@ impl Types for TypedIdentifier {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, RustcEncodable)]
 pub enum Pattern {
     Ident(String),
     TupleDestructure(Vec<String>)
 }
 
-#[derive(Clone, Debug, Copy)]
+#[derive(Clone, Debug, Copy, RustcEncodable)]
 pub enum Binop {
     IntegerPlus,
     IntegerMinus,
@@ -187,7 +216,7 @@ pub enum Binop {
     BooleanOr
 }
 
-#[derive(Clone, Debug, Copy)]
+#[derive(Clone, Debug, Copy, RustcEncodable)]
 pub enum Unop {
     PointerDereference,
     BooleanNot,

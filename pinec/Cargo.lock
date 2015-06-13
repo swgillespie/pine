@@ -6,6 +6,7 @@ dependencies = [
  "getopts 0.2.11 (registry+https://github.com/rust-lang/crates.io-index)",
  "pine_common 0.1.0",
  "pine_syntax 0.1.0",
+ "pine_trans 0.1.0",
  "pine_typecheck 0.1.0",
  "rustc-serialize 0.3.15 (registry+https://github.com/rust-lang/crates.io-index)",
  "time 0.1.26 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -62,12 +63,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "pine_trans"
+version = "0.1.0"
+dependencies = [
+ "log 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pine_typecheck 0.1.0",
+]
+
+[[package]]
 name = "pine_typecheck"
 version = "0.1.0"
 dependencies = [
  "log 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "pine_common 0.1.0",
  "pine_syntax 0.1.0",
+ "rustc-serialize 0.3.15 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]

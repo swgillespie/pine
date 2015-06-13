@@ -11,7 +11,7 @@ pub struct Span(pub Position, pub Position);
 impl fmt::Display for Span {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let Span(Position(start_line, start_col), Position(end_line, end_col)) = *self;
-        write!(f, "({}: {}, {}: {})", start_line, start_col, end_line, end_col)
+        write!(f, "(line {}, col {}, line {}, col {})", start_line, start_col, end_line, end_col)
     }
 }
 
