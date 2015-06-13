@@ -189,8 +189,8 @@ impl Types for TypedIdentifier {
         self.ty.free_type_variables()
     }
 
-    fn apply_subst(&mut self, _: &Substitution) {
-        // nothing to do
+    fn apply_subst(&mut self, subst: &Substitution) {
+        self.ty.apply_subst(subst)
     }
 }
 

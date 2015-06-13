@@ -54,12 +54,11 @@ impl<'ast> TypedVisitor for Monomorphizer<'ast> {
     fn visit_function(&mut self,
                       func: &mut TypedFunction) {
         // just assert that we're not trying to monomorphize something with type variables in it
-        /*
         if !func.free_type_variables().is_empty() {
             panic!("function `{}` is being monomorphized but it has free type variables: `{:?}`",
                   func.name,
                   func.free_type_variables());
-        }*/
+        }
         self.visit_expression(&mut func.body);
     }
 
@@ -96,6 +95,12 @@ impl<'ast> TypedVisitor for Monomorphizer<'ast> {
             // we figure out whether or not it's actually necessary.
             let fun_ty = Type::Function(cloned_func.parameter_types.clone(),
                                         Box::new(cloned_func.return_type.clone()));
+            info!(target: "monomorphization",
+                  "function being invoked type: `{}`",
+                  fun_ty);
+            info!(target: "monomorphization",
+                  "identifier type: `{}`",
+                  ident.ty);
             let subst = types::unify(&fun_ty, &ident.ty)
                 .ok()
                 .expect("this expression passed type resolution \
@@ -125,7 +130,11 @@ impl<'ast> TypedVisitor for Monomorphizer<'ast> {
                 self.visit_function(&mut cloned_func);
                 self.monomorphized_functions.insert(cloned_func.name.clone(), cloned_func);
             }
-
+        } else {
+            info!(target: "monomorphization",
+                  "function `{}` does not need to be monomorphized",
+                  cloned_func.name);
+            self.monomorphized_functions.insert(cloned_func.name.clone(), cloned_func);
         }
     }
 }

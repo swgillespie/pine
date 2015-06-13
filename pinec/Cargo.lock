@@ -13,6 +13,11 @@ dependencies = [
 ]
 
 [[package]]
+name = "bitflags"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
 name = "env_logger"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -38,6 +43,16 @@ dependencies = [
 name = "libc"
 version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "llvm_sys"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "bitflags 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "libc 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "semver 0.1.19 (registry+https://github.com/rust-lang/crates.io-index)",
+]
 
 [[package]]
 name = "log"
@@ -66,6 +81,7 @@ dependencies = [
 name = "pine_trans"
 version = "0.1.0"
 dependencies = [
+ "llvm_sys 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "pine_typecheck 0.1.0",
 ]
@@ -96,6 +112,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "rustc-serialize"
 version = "0.3.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "semver"
+version = "0.1.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]

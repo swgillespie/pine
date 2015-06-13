@@ -82,17 +82,19 @@ impl TypeBinder {
         let s2 = try!(self.unify_with_span(&func.name, &inferred_type, &type_var.ty));
 
         let unifying_subst = compose_subst(&s2, &s1);
-        let mut ret_ty = t1.ty.clone();
-        ret_ty.apply_subst(&unifying_subst);
-        param_types.apply_subst(&unifying_subst);
+        let ret_ty = t1.ty.clone();
+        //ret_ty.apply_subst(&unifying_subst);
+        //param_types.apply_subst(&unifying_subst);
         // if that was successful, then our function is well-typed.
-        let function = typed::TypedFunction {
+        let mut function = typed::TypedFunction {
             return_type: ret_ty,
             parameter_types: param_types,
             name: func.name.data.clone(),
             parameter_names: param_names,
             body: t1.clone()
         };
+        function.apply_subst(&unifying_subst);
+
         self.env = saved_env;
 
         let generalized_fun_type = types::generalize(&self.env, &inferred_type);
@@ -205,11 +207,16 @@ impl TypeBinder {
         // the compose_subst tree kinda sucks, but I translated this
         // from a Haskell example that used it as an infix operator.
         let final_subst = compose_subst(&s4, &compose_subst(&s3, &compose_subst(&s2, &s1)));
+        let mut cond_subst = t1.clone();
+        let mut true_subst = t2.clone();
+        cond_subst.apply_subst(&final_subst);
+        true_subst.apply_subst(&final_subst);
+
         let result = (final_subst, Typed {
             ty: Type::Const(TypeConst::Unit),
             data: typed::Expression::IfThenElse(
-                Box::new(t1.clone()),
-                Box::new(t2.clone()),
+                Box::new(cond_subst),
+                Box::new(true_subst),
                 None)
         });
         Ok(result)
@@ -236,12 +243,19 @@ impl TypeBinder {
         // finally, compose the substitutions and return.
         let final_subst = compose_subst(&s5, &compose_subst(&s4, &compose_subst(&s3, &compose_subst(&s2, &s1))));
 
+        let mut cond_subst = t1.clone();
+        let mut true_subst = t2.clone();
+        let mut false_subst = t3.clone();
+        cond_subst.apply_subst(&final_subst);
+        true_subst.apply_subst(&final_subst);
+        false_subst.apply_subst(&final_subst);
+
         let result = (final_subst, Typed {
             ty: t2.ty.clone(),
             data: typed::Expression::IfThenElse(
-                Box::new(t1.clone()),
-                Box::new(t2.clone()),
-                Some(Box::new(t3.clone())))
+                Box::new(cond_subst),
+                Box::new(true_subst),
+                Some(Box::new(false_subst)))
         });
 
         Ok(result)
@@ -281,16 +295,21 @@ impl TypeBinder {
         info!(target: "type-inference", "signature of called function: `{}` vs. actual type: `{}`", called_type, t1.ty);
 
         let s2 = try!(self.unify_with_span(func, &called_type, &t1.ty));
-        new_var.apply_subst(&s2);
         info!(target: "type-inference", "unifying function call substitution: `{:?}`", s2);
         info!(target: "type-inference", "substituted return type: `{}`", new_var);
 
         let subst = compose_subst(&s2, &compose_subst(&arg_substs, &s1));
+        let mut applied = t1.clone();
+        applied.apply_subst(&subst);
+        new_var.apply_subst(&subst);
+        info!(target: "type-inference", "final type for function expression: `{}`", applied.ty);
+        typed_params.apply_subst(&subst);
+        info!(target: "type-inference", "final type for function call expression: `{}`", new_var);
         Ok((subst,
              Typed {
                  ty: new_var,
                  data: typed::Expression::FunctionCall(
-                     Box::new(t1.clone()),
+                     Box::new(applied),
                      typed_params)
              }))
     }

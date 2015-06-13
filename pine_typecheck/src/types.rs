@@ -87,7 +87,8 @@ impl Types for Type {
         match self {
             &mut Type::Var(v) => match subst.get(&v) {
                 Some(t) => {
-                    *self = t.clone()
+                    *self = t.clone();
+                    //self.apply_subst(subst);
                 },
                 None => {}
             },
