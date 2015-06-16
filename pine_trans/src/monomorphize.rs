@@ -51,6 +51,8 @@ pub fn monomorphize(entry_point: usize, asts: &TypedCompilationUnit) -> TypedCom
 }
 
 impl<'ast> TypedVisitor for Monomorphizer<'ast> {
+    type Return = ();
+
     fn visit_function(&mut self,
                       func: &mut TypedFunction) {
         // just assert that we're not trying to monomorphize something with type variables in it

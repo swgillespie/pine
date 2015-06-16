@@ -76,14 +76,13 @@ pub fn do_compilation(session: &mut Session) {
         return;
     }
 
-    let (pass_4_elapsed_time, monomorphized_asts) = record_time(|| {
+    let (pass_4_elapsed_time, mut monomorphized_asts) = record_time(|| {
         monomorphize(session, &typed_asts)
     });
 
-    if session.options.print_functions {
-        println!("post-monomorphization ---------");
-        print_types(&monomorphized_asts);
-    }
+    let (pass_5_elapsed_time, _) = record_time(|| {
+        translate(session, &mut monomorphized_asts)
+    });
 
     if session.options.ast_as_json {
         let json = json::as_pretty_json(&monomorphized_asts);
@@ -107,6 +106,10 @@ pub fn do_compilation(session: &mut Session) {
                   {:>10} ns {:>12} ms",
                  pass_4_elapsed_time,
                  pass_4_elapsed_time as f64 / 1_000_000f64);
+        println!("translation to llvm ir       - \
+                  {:>10} ns {:>12} ms",
+                 pass_5_elapsed_time,
+                 pass_5_elapsed_time as f64 / 1_000_000f64);
     }
 }
 
@@ -196,6 +199,12 @@ fn identify_main_function(session: &mut Session,
 
 fn monomorphize(session: &Session, asts: &TypedCompilationUnit) -> TypedCompilationUnit {
     pine_trans::monomorphize(session.entry_point.unwrap(), asts)
+}
+
+fn translate(session: &Session, asts: &mut TypedCompilationUnit) {
+    let module = pine_trans::translate(asts, &session.filename);
+    module.verify();
+    module.write_to_file("output.bc");
 }
 
 fn print_types(asts: &TypedCompilationUnit) {

@@ -1,80 +1,93 @@
 use typed_ast::*;
 
 pub trait TypedVisitor: Sized {
-    fn visit_function(&mut self, func: &mut TypedFunction) {
+    type Return : Default;
+
+    fn visit_function(&mut self, func: &mut TypedFunction) -> Self::Return {
         walk_function(self, func);
+        Default::default()
     }
 
-    fn visit_expression(&mut self, expr: &mut TypedExpression) {
+    fn visit_expression(&mut self, expr: &mut TypedExpression) -> Self::Return {
         walk_expression(self, expr);
+        Default::default()
     }
 
-    fn visit_literal(&mut self, _: &mut TypedLiteral) {
-        // do nothing
+    fn visit_literal(&mut self, _: &mut TypedLiteral) -> Self::Return {
+        Default::default()
     }
 
 
-    fn visit_identifier(&mut self, _: &mut TypedIdentifier) {
-        // do nothing
+    fn visit_identifier(&mut self, _: &mut TypedIdentifier) -> Self::Return {
+        Default::default()
     }
 
     fn visit_ref(&mut self,
-                 expr: &mut TypedExpression) {
+                 expr: &mut TypedExpression) -> Self::Return {
         walk_ref(self, expr);
+        Default::default()
     }
 
     fn visit_if_then_else(&mut self,
                           cond: &mut TypedExpression,
                           true_branch: &mut TypedExpression,
-                          false_branch: &mut Option<Box<TypedExpression>>) {
+                          false_branch: &mut Option<Box<TypedExpression>>) -> Self::Return {
         walk_if_then_else(self, cond, true_branch, false_branch);
+        Default::default()
     }
 
     fn visit_function_call(&mut self,
                            func: &mut TypedExpression,
-                           params: &mut [TypedExpression]) {
+                           params: &mut [TypedExpression]) -> Self::Return {
         walk_function_call(self, func, params);
+        Default::default()
     }
 
     fn visit_let(&mut self,
                  pat: &mut Pattern,
                  binding: &mut TypedExpression,
-                 expr: &mut TypedExpression) {
+                 expr: &mut TypedExpression) -> Self::Return {
         walk_let(self, pat, binding, expr);
+        Default::default()
     }
 
     fn visit_assign(&mut self,
                     target: &mut TypedExpression,
-                    source: &mut TypedExpression) {
+                    source: &mut TypedExpression) -> Self::Return {
         walk_assign(self, target, source);
+        Default::default()
     }
 
     fn visit_binary_op(&mut self,
                        left: &mut TypedExpression,
                        right: &mut TypedExpression,
-                       op: &Binop) {
+                       op: &Binop) -> Self::Return {
         walk_binary_op(self, left, right, op);
+        Default::default()
     }
 
     fn visit_unary_op(&mut self,
                       operand: &mut TypedExpression,
-                      op: &Unop) {
+                      op: &Unop) -> Self::Return {
         walk_unary_op(self, operand, op);
+        Default::default()
     }
 
     fn visit_tuple(&mut self,
-                   elements: &mut [TypedExpression]) {
+                   elements: &mut [TypedExpression]) -> Self::Return {
         walk_tuple(self, elements);
+        Default::default()
     }
 
     fn visit_paren(&mut self,
-                   expr: &mut TypedExpression) {
+                   expr: &mut TypedExpression) -> Self::Return {
         walk_paren(self, expr);
+        Default::default()
     }
 
     fn visit_pattern(&mut self,
-                     _: &Pattern) {
-        // do nothing
+                     _: &Pattern) -> Self::Return {
+        Default::default()
     }
 }
 
