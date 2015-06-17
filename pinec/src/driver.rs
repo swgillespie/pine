@@ -12,6 +12,9 @@ use time;
 use std::io::prelude::*;
 use std::fs::File;
 use std::convert::AsRef;
+use std::process::Command;
+use std::ffi::OsStr;
+use std::fs;
 
 pub struct Session {
     pub options: CompilationOptions,
@@ -84,6 +87,10 @@ pub fn do_compilation(session: &mut Session) {
         translate(session, &mut monomorphized_asts)
     });
 
+    let (pass_6_elapsed_time, _) = record_time(|| {
+        optimization_passes(session)
+    });
+
     if session.options.ast_as_json {
         let json = json::as_pretty_json(&monomorphized_asts);
         println!("{}", json);
@@ -110,6 +117,10 @@ pub fn do_compilation(session: &mut Session) {
                   {:>10} ns {:>12} ms",
                  pass_5_elapsed_time,
                  pass_5_elapsed_time as f64 / 1_000_000f64);
+        println!("llvm optimization            - \
+                  {:>10} ns {:>12} ms",
+                 pass_6_elapsed_time,
+                 pass_6_elapsed_time as f64 / 1_000_000f64);
     }
 }
 
@@ -204,7 +215,61 @@ fn monomorphize(session: &Session, asts: &TypedCompilationUnit) -> TypedCompilat
 fn translate(session: &Session, asts: &mut TypedCompilationUnit) {
     let module = pine_trans::translate(asts, &session.filename);
     module.verify();
-    module.write_to_file("output.bc");
+    let output_file = match session.options.output_file {
+        Some(ref path) => path.file_stem()
+            .unwrap_or(OsStr::new("a.out"))
+            .to_str()
+            .unwrap()
+            .to_string(),
+        None => "a.out".to_string()
+    };
+    let bitcode = output_file + ".bc";
+    module.write_to_file(&bitcode);
+}
+
+fn optimization_passes(session: &Session) {
+    let output_file = match session.options.output_file {
+        Some(ref path) => path.file_stem()
+            .unwrap_or(OsStr::new("a.out"))
+            .to_str()
+            .unwrap()
+            .to_string(),
+        None => "a.out".to_string()
+    };
+
+    let object_file = output_file.clone() + ".o";
+    let bitcode_file = output_file.clone() + ".bc";
+    // TODO - a "real" compiler would use the LLVM C api to build up
+    // a list of passes and run them on the module to produce a new
+    // module. I'd like to do this in the future.
+    // For now, in the interest of development speed, we will invoke
+    // `opt` directly and have it do optimization and invoke `llc`
+    // to translate the llvm bitcode to an object file.
+    let opt_command = Command::new("opt")
+        .arg("-O2")
+        .arg(&bitcode_file)
+        .arg("-o")
+        .arg(&bitcode_file)
+        .output()
+        .ok()
+        .expect("failed to invoke `opt`!");
+    if !opt_command.status.success() {
+        panic!("opt exited with non-zero exit code");
+    }
+    let command = Command::new("llc")
+        .arg("-filetype=obj")
+        .arg("-o")
+        .arg(&object_file)
+        .arg(&bitcode_file)
+        .output()
+        .ok()
+        .expect("failed to invoke `llc!`");
+    if !command.status.success() {
+        // TODO proper error handling
+        panic!("llc exited with non-zero exit code");
+    }
+    // we're done with compilation!
+    fs::remove_file(output_file + ".bc").unwrap();
 }
 
 fn print_types(asts: &TypedCompilationUnit) {

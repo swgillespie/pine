@@ -1,12 +1,9 @@
-def apply f, x do
-    f(x)
-end
-
-def add_one n do
-    n + 1
+def fact n do
+    if n == 0 then 1
+    else n * fact(n-1) end
 end
 
 def main do
-    apply(add_one, 5)
+    fact(5)
 end
 

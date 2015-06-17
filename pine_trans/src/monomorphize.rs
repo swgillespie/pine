@@ -7,6 +7,7 @@ use std::hash::{self, SipHasher};
 
 struct Monomorphizer<'ast> {
     monomorphized_functions: HashMap<String, TypedFunction>,
+    monomorphized_function_list: Vec<String>,
     environment: HashMap<String, &'ast TypedFunction>,
 }
 
@@ -22,6 +23,7 @@ pub fn monomorphize(entry_point: usize, asts: &TypedCompilationUnit) -> TypedCom
     // functions being compiled.
     let mut monomorphizer = Monomorphizer {
         monomorphized_functions: HashMap::new(),
+        monomorphized_function_list: vec![],
         environment: HashMap::new(),
     };
     // first - we build our type environment. This provides
@@ -42,12 +44,14 @@ pub fn monomorphize(entry_point: usize, asts: &TypedCompilationUnit) -> TypedCom
     monomorphizer.visit_function(&mut entry_point);
 
     monomorphizer.monomorphized_functions.insert(entry_point.name.clone(), entry_point);
-    // finally - take the monomorphized functions and return
-    // a vector of them.
-    monomorphizer.monomorphized_functions
-        .into_iter()
-        .map(|(_, v)| v)
-        .collect()
+    // finally - take the monomorphized functions, reverse it, and return it
+    let order = monomorphizer.monomorphized_function_list.iter()
+        .rev()
+        .map(|name| monomorphizer.monomorphized_functions.get(name).unwrap())
+        .cloned()
+        .collect();
+    info!(target: "monomorphization", "final codegen order: `{:?}`", monomorphizer.monomorphized_function_list);
+    order
 }
 
 impl<'ast> TypedVisitor for Monomorphizer<'ast> {
@@ -61,6 +65,7 @@ impl<'ast> TypedVisitor for Monomorphizer<'ast> {
                   func.name,
                   func.free_type_variables());
         }
+        self.monomorphized_function_list.push(func.name.clone());
         self.visit_expression(&mut func.body);
     }
 
@@ -130,13 +135,14 @@ impl<'ast> TypedVisitor for Monomorphizer<'ast> {
                       cloned_func.name);
                 // if it hasn't been monomorphized already, do it.
                 self.visit_function(&mut cloned_func);
-                self.monomorphized_functions.insert(cloned_func.name.clone(), cloned_func);
+                self.monomorphized_functions.insert(cloned_func.name.clone(), cloned_func.clone());
             }
         } else {
             info!(target: "monomorphization",
                   "function `{}` does not need to be monomorphized",
                   cloned_func.name);
-            self.monomorphized_functions.insert(cloned_func.name.clone(), cloned_func);
+            self.monomorphized_functions.insert(cloned_func.name.clone(), cloned_func.clone());
+            self.monomorphized_function_list.push(cloned_func.name.clone());
         }
     }
 }

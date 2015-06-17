@@ -24,7 +24,7 @@ impl Drop for TranslatedModule {
 }
 
 impl TranslatedModule {
-    pub fn verify(&self) {
+    pub fn verify(&self) -> bool {
         unsafe {
             let mut ptr = ptr::null_mut();
             let ptr_to_ptr : *mut _ = &mut ptr;
@@ -32,7 +32,12 @@ impl TranslatedModule {
             // ptr is a c_char* to a message given to us by llvm.
             let cstr = CStr::from_ptr(ptr);
             let string = String::from_utf8_lossy(cstr.to_bytes());
-            println!("llvm failed to verify module: {}", string);
+            if string.len() != 0 {
+                println!("llvm failed to verify module: {}", string);
+                false
+            } else {
+                true
+            }
         }
     }
 
@@ -72,10 +77,17 @@ pub fn translate(functions: &mut TypedCompilationUnit, mod_name: &str) -> Transl
     module
 }
 
+#[derive(Copy, Clone)]
+pub enum VariableType {
+    Function(LLVMValueRef),
+    Parameter(LLVMValueRef),
+    Local(LLVMValueRef)
+}
+
 pub struct TransVisitor {
     module: LLVMModuleRef,
     builder: LLVMBuilderRef,
-    symbols: HashMap<String, LLVMValueRef>
+    symbols: HashMap<String, VariableType>
 }
 
 impl TransVisitor {
@@ -113,10 +125,11 @@ impl TypedVisitor for TransVisitor {
                                                  param_tys.as_mut_ptr(),
                                                  param_tys.len() as u32,
                                                  0);
+            info!(target: "trans", "LLVM type for function `{}`: `{}`", func.name, type_to_str(function_type));
             let name = CString::new(&*func.name.clone()).unwrap();
             LLVMAddFunction(self.module, name.as_ptr(), function_type)
         };
-        self.symbols.insert(func.name.clone(), fun);
+        self.symbols.insert(func.name.clone(), VariableType::Function(fun));
         unsafe {
             LLVMSetFunctionCallConv(fun, 1 /*LLVMFastCallConv*/);
             let name = CString::new("entry").unwrap();
@@ -125,7 +138,7 @@ impl TypedVisitor for TransVisitor {
             LLVMPositionBuilderAtEnd(self.builder, entry_block);
             for (idx, param) in func.parameter_names.iter().enumerate() {
                 info!(target: "trans", "inserting parameter `{}` into trans environment", param);
-                self.symbols.insert(param.clone(), LLVMGetParam(fun, idx as u32));
+                self.symbols.insert(param.clone(), VariableType::Parameter(LLVMGetParam(fun, idx as u32)));
             }
             let body = self.visit_expression(&mut func.body).unwrap();
             LLVMBuildRet(self.builder, body);
@@ -187,16 +200,20 @@ impl TypedVisitor for TransVisitor {
                         ident: &mut TypedIdentifier) -> LLVMValue {
         info!(target: "trans", "querying environment for `{}`", ident.data);
         let value = *self.symbols.get(&ident.data).unwrap();
-        if let Type::Function(_, _) = ident.ty {
-            info!(target: "trans", "ident is a function, skipping the load");
-            LLVMValue(value)
-        } else {
-            info!(target: "trans", "ident is not a function, loading an alloca");
-            let load = unsafe {
-                let name = CString::new(&*ident.data).unwrap();
-                LLVMBuildLoad(self.builder, value, name.as_ptr())
-            };
-            LLVMValue(load)
+        match value {
+            VariableType::Local(var) => {
+                info!(target: "trans", "ident is a local, loading an alloca `{}`", value_to_str(var));
+                let load = unsafe {
+                    let name = CString::new(&*ident.data).unwrap();
+                    LLVMBuildLoad(self.builder, var, name.as_ptr())
+                };
+                LLVMValue(load)
+            },
+            VariableType::Parameter(var) |
+            VariableType::Function(var) => {
+                info!(target: "trans", "ident is a function or parameter and doesn't need a load: `{}`", value_to_str(var));
+                LLVMValue(var)
+            }
         }
     }
 
@@ -218,7 +235,7 @@ impl TypedVisitor for TransVisitor {
         };
         let end_block = unsafe {
             let name = CString::new("end_if").unwrap();
-            LLVMAppendBasicBlock(ptr::null_mut(),
+            LLVMAppendBasicBlock(self.get_current_fn(),
                                  name.as_ptr())
         };
 
@@ -227,7 +244,7 @@ impl TypedVisitor for TransVisitor {
         if let &mut Some(ref mut expr) = false_branch {
             let mut else_block = unsafe {
                 let name = CString::new("else").unwrap();
-                LLVMAppendBasicBlock(ptr::null_mut(),
+                LLVMAppendBasicBlock(self.get_current_fn(),
                                      name.as_ptr())
             };
             unsafe {
@@ -279,15 +296,19 @@ impl TypedVisitor for TransVisitor {
                            func: &mut TypedExpression,
                            params: &mut [TypedExpression]) -> LLVMValue {
         let func_value = self.visit_expression(func).unwrap();
+        info!(target: "trans", "function being called value: `{}`", value_to_str(func_value));
         let mut args_values : Vec<_> = params.iter_mut()
             .map(|f| self.visit_expression(f).unwrap())
             .collect();
+        info!(target: "trans", "being called with arguments: `{:?}`",
+              args_values.iter().cloned().map(value_to_str).collect::<Vec<_>>());
         let value = unsafe {
+            let name = CString::new("call").unwrap();
             let call = LLVMBuildCall(self.builder,
                                      func_value,
                                      args_values.as_mut_ptr(),
                                      args_values.len() as u32,
-                                     ptr::null_mut());
+                                     name.as_ptr());
             // `tail` is a hint to LLVM to make this a tail-call
             // if it can. We (the frontend) don't do anything to
             // help LLVM out, so it'll only do TCO in a limited
@@ -298,8 +319,8 @@ impl TypedVisitor for TransVisitor {
             // functions, which use the C calling convention.
             // We need to be sure to use the right calling convention
             // when invoking functions.
-            let cconv = LLVMGetFunctionCallConv(func_value);
-            LLVMSetInstructionCallConv(call, cconv);
+            //let cconv = LLVMGetFunctionCallConv(func_value);
+            LLVMSetInstructionCallConv(call, 1);
             call
         };
         LLVMValue(value)
@@ -329,7 +350,7 @@ impl TypedVisitor for TransVisitor {
         };
         // insert this symbol into our env so we know what local to use
         // when invoking the `let`-bound identifier.
-        self.symbols.insert(ident.clone(), alloca);
+        self.symbols.insert(ident.clone(), VariableType::Local(alloca));
         // next we codegen the binding.
         let binding_reg = self.visit_expression(binding).unwrap();
         // store the binding into the local we just created
@@ -353,42 +374,43 @@ impl TypedVisitor for TransVisitor {
         // TODO - short circuit evaluation of booleans
         let left_reg = self.visit_expression(left).unwrap();
         let right_reg = self.visit_expression(right).unwrap();
+        let name = CString::new("binop").unwrap();
         let value = match *op {
             Binop::IntegerPlus => unsafe {
-                LLVMBuildAdd(self.builder, left_reg, right_reg, ptr::null_mut())
+                LLVMBuildAdd(self.builder, left_reg, right_reg, name.as_ptr())
             },
             Binop::IntegerMinus => unsafe {
-                LLVMBuildSub(self.builder, left_reg, right_reg, ptr::null_mut())
+                LLVMBuildSub(self.builder, left_reg, right_reg, name.as_ptr())
             },
             Binop::IntegerMul => unsafe {
-                LLVMBuildMul(self.builder, left_reg, right_reg, ptr::null_mut())
+                LLVMBuildMul(self.builder, left_reg, right_reg, name.as_ptr())
             },
             Binop::IntegerDiv => unsafe {
-                LLVMBuildSDiv(self.builder, left_reg, right_reg, ptr::null_mut())
+                LLVMBuildSDiv(self.builder, left_reg, right_reg, name.as_ptr())
             },
             Binop::IntegerGeq => unsafe {
-                LLVMBuildICmp(self.builder, LLVMIntPredicate::LLVMIntSGE, left_reg, right_reg, ptr::null_mut())
+                LLVMBuildICmp(self.builder, LLVMIntPredicate::LLVMIntSGE, left_reg, right_reg, name.as_ptr())
             },
             Binop::IntegerLeq => unsafe {
-                LLVMBuildICmp(self.builder, LLVMIntPredicate::LLVMIntSLE, left_reg, right_reg, ptr::null_mut())
+                LLVMBuildICmp(self.builder, LLVMIntPredicate::LLVMIntSLE, left_reg, right_reg, name.as_ptr())
             },
             Binop::IntegerGT => unsafe {
-                LLVMBuildICmp(self.builder, LLVMIntPredicate::LLVMIntSGT, left_reg, right_reg, ptr::null_mut())
+                LLVMBuildICmp(self.builder, LLVMIntPredicate::LLVMIntSGT, left_reg, right_reg, name.as_ptr())
             },
             Binop::IntegerLT => unsafe {
-                LLVMBuildICmp(self.builder, LLVMIntPredicate::LLVMIntSLT, left_reg, right_reg, ptr::null_mut())
+                LLVMBuildICmp(self.builder, LLVMIntPredicate::LLVMIntSLT, left_reg, right_reg, name.as_ptr())
             },
             Binop::PointerEq => unsafe {
-                LLVMBuildICmp(self.builder, LLVMIntPredicate::LLVMIntEQ, left_reg, right_reg, ptr::null_mut())
+                LLVMBuildICmp(self.builder, LLVMIntPredicate::LLVMIntEQ, left_reg, right_reg, name.as_ptr())
             },
             Binop::PointerNeq => unsafe {
-                LLVMBuildICmp(self.builder, LLVMIntPredicate::LLVMIntNE, left_reg, right_reg, ptr::null_mut())
+                LLVMBuildICmp(self.builder, LLVMIntPredicate::LLVMIntNE, left_reg, right_reg, name.as_ptr())
             },
             Binop::BooleanAnd => unsafe {
-                LLVMBuildAnd(self.builder, left_reg, right_reg, ptr::null_mut())
+                LLVMBuildAnd(self.builder, left_reg, right_reg, name.as_ptr())
             },
             Binop::BooleanOr => unsafe {
-                LLVMBuildOr(self.builder, left_reg, right_reg, ptr::null_mut())
+                LLVMBuildOr(self.builder, left_reg, right_reg, name.as_ptr())
             }
         };
         LLVMValue(value)
@@ -398,13 +420,14 @@ impl TypedVisitor for TransVisitor {
                       operand: &mut TypedExpression,
                       op: &Unop) -> LLVMValue {
         let op_reg = self.visit_expression(operand).unwrap();
+        let name = CString::new("unop").unwrap();
         let value = match *op {
             Unop::PointerDereference => unimplemented!(),
             Unop::BooleanNot => unsafe {
-                LLVMBuildNot(self.builder, op_reg, ptr::null_mut())
+                LLVMBuildNot(self.builder, op_reg, name.as_ptr())
             },
             Unop::IntegerNegate => unsafe {
-                LLVMBuildSub(self.builder, LLVMConstInt(LLVMInt32Type(), 0, 0), op_reg, ptr::null_mut())
+                LLVMBuildSub(self.builder, LLVMConstInt(LLVMInt32Type(), 0, 0), op_reg, name.as_ptr())
             }
         };
         LLVMValue(value)
@@ -459,5 +482,19 @@ fn type_to_llvm_type(ty: &Type) -> LLVMTypeRef {
             // Keeping it simple for now.
             unsafe { LLVMPointerType(fn_ty, 0) }
         }
+    }
+}
+
+fn type_to_str(ty: LLVMTypeRef) -> String {
+    unsafe {
+        let cstr = CStr::from_ptr(LLVMPrintTypeToString(ty));
+        String::from_utf8_lossy(cstr.to_bytes()).into_owned()
+    }
+}
+
+fn value_to_str(ty: LLVMValueRef) -> String {
+    unsafe {
+        let cstr = CStr::from_ptr(LLVMPrintValueToString(ty));
+        String::from_utf8_lossy(cstr.to_bytes()).into_owned()
     }
 }
