@@ -29,7 +29,7 @@ through syntactic sugar.
 ### Future features, in order of priority
 * User-defined types + limited pattern matching upon them
 * `_` as an ignored identifier
-* TESTS TESTS TESTS TESTS. Likely need to write my own test hardness
+* TESTS TESTS TESTS TESTS. Likely need to write my own test harness
 * Function literals, i.e. lambdas, a requirement for any self-respecting functional language
 * `let () =` syntactic sugar for side-effect-only expressions, from OCaml
 * `match` expression for generalized pattern matching
