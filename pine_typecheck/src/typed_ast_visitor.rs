@@ -3,8 +3,17 @@ use typed_ast::*;
 pub trait TypedVisitor: Sized {
     type Return : Default;
 
+    fn visit_item(&mut self, item: &mut TypedItem) -> Self::Return {
+        walk_item(self, item);
+        Default::default()
+    }
+
     fn visit_function(&mut self, func: &mut TypedFunction) -> Self::Return {
         walk_function(self, func);
+        Default::default()
+    }
+
+    fn visit_extern_function(&mut self, _: &mut TypedExternFunction) -> Self::Return {
         Default::default()
     }
 
@@ -89,6 +98,14 @@ pub trait TypedVisitor: Sized {
                      _: &Pattern) -> Self::Return {
         Default::default()
     }
+}
+
+pub fn walk_item<V: TypedVisitor>(visitor: &mut V,
+                                  item: &mut TypedItem) {
+    match item {
+        &mut TypedItem::Function(ref mut func) => visitor.visit_function(func),
+        &mut TypedItem::ExternFunction(ref mut extern_fn) => visitor.visit_extern_function(extern_fn)
+    };
 }
 
 pub fn walk_function<V: TypedVisitor>(visitor: &mut V,

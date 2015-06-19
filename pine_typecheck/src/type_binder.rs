@@ -103,6 +103,32 @@ impl TypeBinder {
         Ok(((unifying_subst, function)))
     }
 
+    pub fn visit_item(&mut self,
+                      item: &ast::Item) -> Result<Bound<typed::TypedItem>, CompileDiagnostic> {
+        match item {
+            &ast::Item::Function(ref func) => {
+                let (subst, ast) = try!(self.visit_function(&func.data));
+                Ok((subst, typed::TypedItem::Function(ast)))
+            },
+            &ast::Item::ExternFunction(ref extern_fn) => {
+                match type_ast_to_type(&extern_fn.data.ty.data) {
+                    Ok(ty) => {
+                        info!(target: "type-inference", "inserting extern fn `{}` with type `{}` into env",
+                              extern_fn.data.name.data, ty);
+                        let generalized = types::generalize(&self.env, &ty);
+                        self.env.insert(extern_fn.data.name.data.clone(), generalized);
+                        Ok((types::empty_subst(),
+                            typed::TypedItem::ExternFunction(typed::TypedExternFunction {
+                                ty: ty,
+                                name: extern_fn.data.name.data.clone()
+                            })))
+                    },
+                    Err(msg) => span_err_and_return!(self, extern_fn.data.ty, msg)
+                }
+            }
+        }
+    }
+
     fn visit_body<'ast>(&mut self,
                         block: &'ast ast::SpannedBlock) -> Result<Bound<typed::TypedExpression>, CompileDiagnostic> {
         match block.data.0 {
@@ -532,5 +558,29 @@ impl TypeBinder {
             Ok(subst) => Ok(subst),
             Err(msg) => span_err_and_return!(self, span, msg)
         }
+    }
+}
+
+fn type_ast_to_type(ty: &ast::Type) -> Result<Type, String> {
+    match ty {
+        &ast::Type::Identifier(ref ident) => match &**ident {
+            "int" => Ok(Type::Const(TypeConst::Int)),
+            "bool" => Ok(Type::Const(TypeConst::Bool)),
+            "string" => Ok(Type::Const(TypeConst::String)),
+            "float" => Ok(Type::Const(TypeConst::Float)),
+            "unit" => Ok(Type::Const(TypeConst::Unit)),
+            _ => Err(format!("Unknown type: `{}`", ident))
+        },
+        // TODO - type application
+        &ast::Type::Application(_, _) => unimplemented!(),
+        &ast::Type::Function(ref params, ref ret_ty) => {
+            let mut params_ty = vec![];
+            for param in params.iter() {
+                params_ty.push(try!(type_ast_to_type(&param.data)));
+            }
+            let return_ty = try!(type_ast_to_type(&ret_ty.data));
+            Ok(Type::Function(params_ty, Box::new(return_ty)))
+        },
+        &ast::Type::Tuple(_) => unimplemented!()
     }
 }

@@ -1,0 +1,19 @@
+extern def print_string : string -> unit
+extern def print_int_line : int -> unit
+
+def fact n do
+    if n == 0 then 1
+    else n * fact(n-1) end
+end
+
+def apply f, x do
+    f(x)
+end
+
+def main do
+    let fact_10 = apply(fact, 11) in
+    let f = print_string("fact(11) = ") in
+    let q = print_int_line(fact_10) in
+    0
+end
+

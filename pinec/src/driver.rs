@@ -1,7 +1,7 @@
 use pine_common::{CompileDiagnostic, Severity, Span, Position};
 use pine_syntax::ast::CompilationUnit;
 use pine_syntax;
-use pine_typecheck::typed_ast::TypedCompilationUnit;
+use pine_typecheck::typed_ast::{TypedCompilationUnit, TypedItem};
 use pine_typecheck::types::{self, Type, TypeConst, Types};
 use pine_typecheck;
 use pine_trans;
@@ -171,14 +171,21 @@ fn type_resolution(session: &mut Session,
 fn identify_main_function(session: &mut Session,
                           typed_unit: &mut TypedCompilationUnit) -> bool {
     let mut main_function = None;
-    for (idx, func) in typed_unit.iter_mut().enumerate() {
-        if func.name == "main" {
-            if let Some(_) = main_function {
-                session.error("multiple `main` functions are not allowed");
+    for (idx, item) in typed_unit.iter_mut().enumerate() {
+        if let &mut TypedItem::Function(ref mut func) = item {
+            if func.name == "main" {
+                if let Some(_) = main_function {
+                    session.error("multiple `main` functions are not allowed");
+                    return false;
+                } else {
+                    main_function = Some(func);
+                    session.entry_point = Some(idx);
+                }
+            }
+        } else if let &mut TypedItem::ExternFunction(ref mut extern_fn) = item {
+            if extern_fn.name == "main" {
+                session.error("`main` function cannot be extern");
                 return false;
-            } else {
-                main_function = Some(func);
-                session.entry_point = Some(idx);
             }
         }
     }
@@ -273,10 +280,12 @@ fn optimization_passes(session: &Session) {
 }
 
 fn print_types(asts: &TypedCompilationUnit) {
-    for typed_function in asts.iter() {
-        let ty = Type::Function(typed_function.parameter_types.clone(),
-                                Box::new(typed_function.return_type.clone()));
-        println!("{} :: {}", typed_function.name, ty);
+    for typed_item in asts.iter() {
+        if let &TypedItem::Function(ref typed_function) = typed_item {
+            let ty = Type::Function(typed_function.parameter_types.clone(),
+                                    Box::new(typed_function.return_type.clone()));
+            println!("{} :: {}", typed_function.name, ty);
+        }
     }
 }
 

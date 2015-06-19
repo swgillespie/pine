@@ -1,7 +1,12 @@
 use pine_common::Span;
 use rustc_serialize::{Encodable, Encoder};
 
-pub type CompilationUnit = Vec<SpannedFunction>;
+pub type CompilationUnit = Vec<Item>;
+
+pub enum Item {
+    Function(SpannedFunction),
+    ExternFunction(SpannedExternFunction),
+}
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct Spanned<T> {
@@ -24,6 +29,21 @@ pub struct Function {
     pub name: SpannedString,
     pub parameters: Vec<SpannedString>,
     pub body: SpannedBlock
+}
+
+pub type SpannedExternFunction = Spanned<ExternFunction>;
+pub struct ExternFunction {
+    pub name: SpannedString,
+    pub ty: SpannedType
+}
+
+pub type SpannedType = Spanned<Type>;
+#[derive(PartialEq, Debug, Clone, RustcEncodable)]
+pub enum Type {
+    Identifier(String),
+    Application(Box<SpannedType>, Vec<SpannedType>),
+    Function(Vec<SpannedType>, Box<SpannedType>),
+    Tuple(Vec<SpannedType>)
 }
 
 #[derive(PartialEq, Debug, Clone, RustcEncodable)]

@@ -72,12 +72,140 @@ impl<I: Iterator<Item=char>> Parser<I> {
         let mut vec = vec![];
         loop {
             let func = match self.lexer.peek() {
-                Some(_) => try!(self.function()),
+                Some(_) => try!(self.item()),
                 None => break
             };
             vec.push(func)
         }
         Ok(vec)
+    }
+
+    fn item(&mut self) -> ParseResult<Item> {
+        let item = if next_token_one_of!(self.lexer, Extern) {
+            Item::ExternFunction(try!(self.extern_function()))
+        } else {
+            Item::Function(try!(self.function()))
+        };
+        Ok(item)
+    }
+
+    fn extern_function(&mut self) -> ParseResult<SpannedExternFunction> {
+        let Span(start, _) = try!(self.parse_token(Extern));
+        let _ = try!(self.parse_token(Def));
+        let name = try!(self.identifier());
+        let _ = try!(self.parse_token(HasType));
+        let ty = try!(self.ty());
+        Ok(Spanned {
+            span: Span(start, ty.span.1),
+            data: ExternFunction {
+                name: name,
+                ty: ty
+            }
+        })
+    }
+
+    fn ty(&mut self) -> ParseResult<SpannedType> {
+        let base_type = if next_token_one_of!(self.lexer, LBracket) {
+            try!(self.function_type())
+        } else if next_token_one_of!(self.lexer, LParen) {
+            try!(self.tuple_type())
+        } else {
+            let ident = try!(self.identifier());
+            Spanned {
+                span: ident.span,
+                data: Type::Identifier(ident.data)
+            }
+        };
+        self.type_suffix(base_type)
+    }
+
+    fn function_type(&mut self) -> ParseResult<SpannedType> {
+        let Span(start, _) = try!(self.parse_token(LBracket));
+        let mut args = vec![];
+        loop {
+            if next_token_one_of!(self.lexer, RBracket) {
+                break;
+            }
+            let argument = try!(self.ty());
+            args.push(argument);
+            if next_token_one_of!(self.lexer, Comma) {
+                let _ = try!(self.parse_token(Comma));
+            } else {
+                break;
+            }
+        }
+        let _ = try!(self.parse_token(RBracket));
+        let _ = try!(self.parse_token(RightArrow));
+        let retty = try!(self.ty());
+        Ok(Spanned {
+            span: Span(start, retty.span.1),
+            data: Type::Function(args, Box::new(retty))
+        })
+    }
+
+    fn tuple_type(&mut self) -> ParseResult<SpannedType> {
+        let Span(start, _) = try!(self.parse_token(LParen));
+        let mut tup_args = vec![];
+        loop {
+            let tup_arg = try!(self.ty());
+            tup_args.push(tup_arg);
+            if next_token_one_of!(self.lexer, Comma) {
+                let _ = try!(self.parse_token(Comma));
+            } else {
+                break;
+            }
+        }
+        let Span(_, stop) = try!(self.parse_token(RParen));
+        if tup_args.len() == 1 {
+            Ok(Spanned {
+                span: tup_args[0].span,
+                data: tup_args[0].data.clone()
+            })
+        } else {
+            Ok(Spanned {
+                span: Span(start, stop),
+                data: Type::Tuple(tup_args)
+            })
+        }
+    }
+
+    fn type_suffix(&mut self, base: SpannedType) -> ParseResult<SpannedType> {
+        let mut ty = base;
+        loop {
+            if next_token_one_of!(self.lexer, LBracket) {
+                // type application
+                let _ = try!(self.parse_token(LBracket));
+                let mut args = vec![];
+                loop {
+                    if next_token_one_of!(self.lexer, RBracket) {
+                        break;
+                    }
+                    let argument = try!(self.ty());
+                    args.push(argument);
+                    if next_token_one_of!(self.lexer, Comma) {
+                        let _ = try!(self.parse_token(Comma));
+                    } else {
+                        break;
+                    }
+                }
+                let Span(_, end) = try!(self.parse_token(RBracket));
+                ty = Spanned {
+                    span: Span(ty.span.0, end),
+                    data: Type::Application(Box::new(ty), args)
+                };
+            } else if next_token_one_of!(self.lexer, RightArrow) {
+                // single-argument function
+                let _ = try!(self.parse_token(RightArrow));
+                let retty = try!(self.ty());
+                ty = Spanned {
+                    span: Span(ty.span.0, ty.span.1),
+                    data: Type::Function(vec![ty], Box::new(retty))
+                };
+            } else {
+                break;
+            }
+        }
+        Ok(ty)
     }
 
     pub fn function(&mut self) -> ParseResult<SpannedFunction> {

@@ -1,0 +1,11 @@
+extern def print_string_line : string -> unit
+extern def print_string : string -> unit
+extern def read_line : [] -> string
+
+def main do
+    let f = print_string_line("hello! what is your name?") in
+    let name = read_line() in
+    let n = print_string("hello, ") in
+    let p = print_string(name) in
+    0
+end

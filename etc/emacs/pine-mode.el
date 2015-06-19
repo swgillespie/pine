@@ -10,7 +10,7 @@
   '("#")
   ;; keywords
   '("def" "ref" "if" "then" "else" "end"
-    "do" "let" "in" "and" "or" "not")
+    "do" "let" "in" "and" "or" "not" "extern")
   ;; font-lock identifier highlighting
   '(("[a-zA-Z][a-zA-Z0-9_]*" . 'font-lock-variable-name-face)
     '("[0-9]+" . 'font-lock-constant-face)

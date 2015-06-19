@@ -110,6 +110,8 @@ pub enum TokenType {
     LeftArrow,
     LParen,
     RParen,
+    LBracket,
+    RBracket,
     DoubleEq,
     LessThanEq,
     LessThan,
@@ -123,7 +125,10 @@ pub enum TokenType {
     Not,
     Deref,
     And,
-    Or
+    Or,
+    Extern,
+    HasType,
+    RightArrow
 }
 
 /// The Lexer struct wraps an iterator of chars to provide an iterator
@@ -230,9 +235,12 @@ impl<I: Iterator<Item=char>> Lexer<I> {
             '(' => Ok(Token::new(starting_position, self.current_position, LParen)),
             ')' => Ok(Token::new(starting_position, self.current_position, RParen)),
             '+' => Ok(Token::new(starting_position, self.current_position, Plus)),
-            '-' => Ok(Token::new(starting_position, self.current_position, Minus)),
             '*' => Ok(Token::new(starting_position, self.current_position, Times)),
             '/' => Ok(Token::new(starting_position, self.current_position, Div)),
+            ':' => Ok(Token::new(starting_position, self.current_position, HasType)),
+            '[' => Ok(Token::new(starting_position, self.current_position, LBracket)),
+            ']' => Ok(Token::new(starting_position, self.current_position, RBracket)),
+            '-' => self.minus_or_right_arrow(starting_position),
             '=' => self.single_or_double_eq(starting_position),
             '<' => self.less_operator_or_arrow(starting_position),
             '>' => self.greater_or_geq_operator(starting_position),
@@ -241,6 +249,17 @@ impl<I: Iterator<Item=char>> Lexer<I> {
             c if c.is_digit(10) => self.number(c, starting_position),
             c if c.is_alphabetic() => self.identifier(c, starting_position),
             _ => self.span_err(starting_position, self.current_position, LexerErrorKind::UnknownCharacter)
+        }
+    }
+
+    fn minus_or_right_arrow(&mut self, start: Position) -> Result<Token, CompileDiagnostic> {
+        if let Some(&'>') = self.iter.peek() {
+            // it's a ->.
+            let _ = self.next_char();
+            Ok(Token::new(start, self.current_position, RightArrow))
+        } else {
+            // it's a -.
+            Ok(Token::new(start, self.current_position, Minus))
         }
     }
 
@@ -434,7 +453,8 @@ fn extract_keyword(string: &str) -> Option<TokenType> {
         "false" => Some(BooleanLiteral(false)),
         "and" => Some(And),
         "or" => Some(Or),
-        "unit" => Some(UnitLiteral),
+        "nil" => Some(UnitLiteral),
+        "extern" => Some(Extern),
         _ => None
     }
 }

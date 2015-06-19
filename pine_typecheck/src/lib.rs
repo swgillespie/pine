@@ -22,7 +22,7 @@ pub use typed_ast_visitor::TypedVisitor;
 pub fn typecheck_compilation_unit(binder: &mut TypeBinder, unit: &CompilationUnit) -> Result<TypedCompilationUnit, CompileDiagnostic> {
     let mut fns = vec![];
     for func in unit.iter() {
-        let (_, ty) = try!(binder.visit_function(&func.data));
+        let (_, ty) = try!(binder.visit_item(func));
         fns.push(ty);
     }
     Ok(fns)

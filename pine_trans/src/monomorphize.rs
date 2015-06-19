@@ -1,4 +1,4 @@
-use pine_typecheck::typed_ast::{TypedCompilationUnit, TypedFunction, TypedIdentifier};
+use pine_typecheck::typed_ast::{TypedCompilationUnit, TypedFunction, TypedIdentifier, TypedExternFunction, TypedItem};
 use pine_typecheck::types::{Types, self, Type};
 use pine_typecheck::TypedVisitor;
 
@@ -8,6 +8,7 @@ use std::hash::{self, SipHasher};
 struct Monomorphizer<'ast> {
     monomorphized_functions: HashMap<String, TypedFunction>,
     monomorphized_function_list: Vec<String>,
+    extern_function_list: Vec<TypedExternFunction>,
     environment: HashMap<String, &'ast TypedFunction>,
 }
 
@@ -24,13 +25,16 @@ pub fn monomorphize(entry_point: usize, asts: &TypedCompilationUnit) -> TypedCom
     let mut monomorphizer = Monomorphizer {
         monomorphized_functions: HashMap::new(),
         monomorphized_function_list: vec![],
+        extern_function_list: vec![],
         environment: HashMap::new(),
     };
     // first - we build our type environment. This provides
     // the monomorphization process with the knowledge of what
     // type a function has.
     for func in asts {
-        monomorphizer.environment.insert(func.name.clone(), func);
+        if let &TypedItem::Function(ref defined_func) = func {
+            monomorphizer.environment.insert(defined_func.name.clone(), defined_func);
+        }
     }
 
     // next - begin monomorphization at the entry point, since it's
@@ -38,24 +42,52 @@ pub fn monomorphize(entry_point: usize, asts: &TypedCompilationUnit) -> TypedCom
     info!(target: "monomorphization",
           "beginning monomorphization pass");
     let mut entry_point = asts[entry_point].clone();
-    info!(target: "monomorphization",
-          "beginning to monomorphize function: `{}`",
-          entry_point.name);
-    monomorphizer.visit_function(&mut entry_point);
+    match entry_point {
+        TypedItem::Function(ref mut func) => {
+            info!(target: "monomorphization",
+                  "beginning to monomorphize function: `{}`",
+                  func.name);
+            monomorphizer.visit_function(func);
+            monomorphizer.monomorphized_functions.insert(func.name.clone(), func.clone());
+        },
+        TypedItem::ExternFunction(_) => unreachable!() // main cannot be extern
+    }
 
-    monomorphizer.monomorphized_functions.insert(entry_point.name.clone(), entry_point);
+    // next - insert all extern functions in to the list of functions to be codegen'd.
+    for item in asts.iter() {
+        if let &TypedItem::ExternFunction(ref extern_fn) = item {
+            monomorphizer.extern_function_list.push(extern_fn.clone());
+        }
+    }
+
+
     // finally - take the monomorphized functions, reverse it, and return it
-    let order = monomorphizer.monomorphized_function_list.iter()
-        .rev()
+    let order : Vec<_> = monomorphizer.monomorphized_function_list.iter()
         .map(|name| monomorphizer.monomorphized_functions.get(name).unwrap())
         .cloned()
+        .map(TypedItem::Function)
+        .chain(monomorphizer.extern_function_list.iter()
+               .cloned()
+               .map(TypedItem::ExternFunction))
+        .rev()
         .collect();
-    info!(target: "monomorphization", "final codegen order: `{:?}`", monomorphizer.monomorphized_function_list);
+    info!(target: "monomorphization", "final codegen order: `{:?}`", order.iter().map(|t| match t {
+        &TypedItem::Function(ref f) => f.name.clone(),
+        &TypedItem::ExternFunction(ref e) => e.name.clone()
+    }).collect::<Vec<_>>());
     order
 }
 
 impl<'ast> TypedVisitor for Monomorphizer<'ast> {
     type Return = ();
+
+    fn visit_extern_function(&mut self, extern_fn: &mut TypedExternFunction) {
+        // there's nothing that needs to be done for extern functions during this pass.
+        // We just need to record them so we don't forget to codegen declarations for them later.
+        info!(target: "monomorphization",
+              "observed extern fn `{}`, recording for later", extern_fn.name);
+        self.extern_function_list.push(extern_fn.clone());
+    }
 
     fn visit_function(&mut self,
                       func: &mut TypedFunction) {
@@ -81,7 +113,7 @@ impl<'ast> TypedVisitor for Monomorphizer<'ast> {
         let mut cloned_func = if let Some(func) = self.environment.get(&ident.data) {
             (*func).clone()
         } else {
-            // nothing to do here if this identifier isn't a function.
+            // nothing to do here if this identifier isn't a function or it's an extern function.
             return;
         };
 

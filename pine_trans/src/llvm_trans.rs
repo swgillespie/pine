@@ -72,7 +72,10 @@ pub fn translate(functions: &mut TypedCompilationUnit, mod_name: &str) -> Transl
     let module = unsafe { TranslatedModule(LLVMModuleCreateWithName(name.as_ptr())) };
     let mut visitor = TransVisitor::new(module.0);
     for func in functions.iter_mut() {
-        visitor.visit_function(func);
+        match func {
+            &mut TypedItem::Function(ref mut func) => visitor.visit_function(func),
+            &mut TypedItem::ExternFunction(ref mut extern_fn) => visitor.visit_extern_function(extern_fn)
+        };
     }
     module
 }
@@ -115,6 +118,34 @@ impl TransVisitor {
 impl TypedVisitor for TransVisitor {
     type Return = LLVMValue;
 
+    fn visit_extern_function(&mut self, func: &mut TypedExternFunction) -> LLVMValue {
+        let ty = if let &Type::Function(ref args, ref retty) = &func.ty {
+            let return_ty = type_to_llvm_type(retty);
+            let mut param_tys : Vec<_> = args.iter()
+                .map(type_to_llvm_type)
+                .collect();
+            unsafe {
+                let param_tys_ptr = param_tys.as_mut_ptr();
+                LLVMFunctionType(return_ty,
+                                 param_tys_ptr,
+                                 param_tys.len() as u32,
+                                 0)
+            }
+        } else {
+            type_to_llvm_type(&func.ty)
+        };
+        info!(target: "trans", "created LLVM type `{}` for extern fn `{}`",
+              type_to_str(ty), func.name);
+        let llvm_func = unsafe {
+            let name = CString::new(&*func.name).unwrap();
+            LLVMAddFunction(self.module, name.as_ptr(), ty)
+        };
+        info!(target: "trans", "decl for extern fn `{}`: `{}`",
+              func.name, value_to_str(llvm_func));
+        self.symbols.insert(func.name.clone(), VariableType::Function(llvm_func));
+        LLVMValue(llvm_func)
+    }
+
     fn visit_function(&mut self, func: &mut TypedFunction) -> LLVMValue {
         let mut param_tys : Vec<_> = func.parameter_types.iter()
             .map(type_to_llvm_type)
@@ -136,6 +167,23 @@ impl TypedVisitor for TransVisitor {
             let entry_block = LLVMAppendBasicBlock(fun, name.as_ptr());
             self.builder = LLVMCreateBuilder();
             LLVMPositionBuilderAtEnd(self.builder, entry_block);
+            if func.name == "main" {
+                info!(target: "trans", "detected that we are trans-ing the entry point. Inserting a call to initialize the GC");
+                let args_type = &mut[];
+                let gc_init_name = CString::new("gc_init").unwrap();
+                let ty =  LLVMFunctionType(LLVMVoidType(),
+                                           args_type.as_mut_ptr(),
+                                           args_type.len() as u32,
+                                           0);
+                let gc_init_fn = LLVMAddFunction(self.module, gc_init_name.as_ptr(), ty);
+                let args_values = &mut [];
+                let empty_str = CString::new("").unwrap();
+                LLVMBuildCall(self.builder,
+                              gc_init_fn,
+                              args_values.as_mut_ptr(),
+                              args_values.len() as u32,
+                              empty_str.as_ptr());
+            }
             for (idx, param) in func.parameter_names.iter().enumerate() {
                 info!(target: "trans", "inserting parameter `{}` into trans environment", param);
                 self.symbols.insert(param.clone(), VariableType::Parameter(LLVMGetParam(fun, idx as u32)));
@@ -176,19 +224,27 @@ impl TypedVisitor for TransVisitor {
             // wtf LLVM, why doesn't LLVMConstFloat exist
             Literal::Float(_) => /* unsafe { LLVMConstFloat(LLVMFloatType(), f, 0)}; */ unimplemented!(),
             Literal::String(ref s) => unsafe {
+                // TODO - re-use string literals that have already been created for duplicate literals
+                info!(target: "trans", "attempting to build a string literal");
                 // this is where things get interesting. First, we create a new global
                 let name = CString::new("strlit").unwrap();
                 // TODO - &*s.clone() looks a little iffy
                 let data = CString::new(&*s.clone()).unwrap();
-                let global = LLVMAddGlobal(self.module, LLVMArrayType(LLVMInt8Type(), s.len() as u32), name.as_ptr());
+                let global = LLVMAddGlobal(self.module, LLVMArrayType(LLVMInt8Type(), (s.len() + 1) as u32), name.as_ptr());
                 // set its linkage to internal
                 LLVMSetLinkage(global, LLVMLinkage::LLVMInternalLinkage);
                 // mark it as a global constant
                 LLVMSetGlobalConstant(global, 1);
                 // set the initializer to be the value of the string literal
-                LLVMSetInitializer(global, LLVMConstString(data.as_ptr(), s.len() as u32, 1));
-                // return the global.
-                global
+                LLVMSetInitializer(global, LLVMConstString(data.as_ptr(), (s.len() + 1) /* including the null byte */ as u32, 1));
+                LLVMSetUnnamedAddr(global, 1);
+                // get a pointer to this global
+                info!(target: "trans", "global string: `{}`", value_to_str(global));
+                let index = &mut [LLVMConstInt(LLVMInt32Type(), 0, 0),
+                                  LLVMConstInt(LLVMInt32Type(), 0, 0)];
+                let ptr = LLVMBuildInBoundsGEP(self.builder, global, index.as_mut_ptr(), index.len() as u32, name.as_ptr());
+                info!(target: "trans", "gep'd string: `{}`", value_to_str(ptr));
+                ptr
             },
             // by convention, unit is boolean false
             Literal::Unit => unsafe { LLVMConstInt(LLVMInt1Type(), 0, 0) }

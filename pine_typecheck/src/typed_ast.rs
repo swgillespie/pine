@@ -3,7 +3,13 @@ use rustc_serialize::{Encodable, Encoder};
 use std::collections::HashSet;
 use types::{Type, Types, Substitution, TypeVar};
 
-pub type TypedCompilationUnit = Vec<TypedFunction>;
+pub type TypedCompilationUnit = Vec<TypedItem>;
+
+#[derive(Clone, Debug, RustcEncodable)]
+pub enum TypedItem {
+    Function(TypedFunction),
+    ExternFunction(TypedExternFunction)
+}
 
 #[derive(Clone, Debug, RustcEncodable)]
 pub struct TypedFunction {
@@ -12,6 +18,12 @@ pub struct TypedFunction {
     pub name: String,
     pub parameter_names: Vec<String>,
     pub body: TypedExpression
+}
+
+#[derive(Clone, Debug, RustcEncodable)]
+pub struct TypedExternFunction {
+    pub ty: Type,
+    pub name: String
 }
 
 impl Types for TypedFunction {
