@@ -361,14 +361,29 @@ impl TypeBinder {
                        pat: &'ast ast::SpannedPattern,
                        binding: &'ast ast::SpannedExpression,
                        body: &'ast ast::SpannedExpression) -> Result<Bound<typed::TypedExpression>, CompileDiagnostic> {
+        // TODO move some of this logic to visit_pattern?
         let ident = match pat.data {
             ast::Pattern::Ident(ref s) => s.data.clone(),
+            ast::Pattern::Ignored => {
+                // patterns can use the _ character to indicate
+                // that they don't care about binding the result of
+                // the binding subexpression to anything.
+                let (ref s1, ref t1) = try!(self.visit_expression(binding));
+                let (ref s2, ref t2) = try!(self.visit_expression(body));
+                return Ok((compose_subst(s1, s2), Typed {
+                    ty: t2.ty.clone(),
+                    data: typed::Expression::Let(typed::Pattern::Ignored,
+                                                 Box::new(t1.clone()),
+                                                 Box::new(t2.clone()))
+                }));
+            }
             _ => span_err_and_return!(self, pat,
-                                 "non-ident patterns have not been \
-                                  implemented yet."
-                                 .to_string())
+                                      "non-ident patterns have not been \
+                                       implemented yet."
+                                      .to_string())
         };
 
+        // otherwise, we want to bind this variable to a new scope.
         let bound_binding = try!(self.visit_expression(binding));
         let (ref s1, ref t1) = bound_binding;
         let saved_env = self.env.clone();

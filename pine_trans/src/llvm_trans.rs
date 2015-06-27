@@ -389,7 +389,14 @@ impl TypedVisitor for TransVisitor {
         // TODO - right now patterns can only be identifiers.
         let ident = match *pat {
             Pattern::Ident(ref i) => i.clone(),
-            _ => panic!("only identifier patterns are supported")
+            Pattern::Ignored => {
+                // if we're ignoring the result of the binding expression,
+                // we don't need to allocate a local and can just codegen
+                // the binding followed by the body.
+                let _ = self.visit_expression(binding);
+                return self.visit_expression(expr)
+            },
+            _ => unimplemented!()
         };
         // also TODO - by default we put all of our `let`s into
         // `alloca`s. This isn't entirely correct, though,

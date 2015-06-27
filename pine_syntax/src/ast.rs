@@ -112,5 +112,6 @@ pub type SpannedPattern = Spanned<Pattern>;
 #[derive(PartialEq, Debug, Clone, RustcEncodable)]
 pub enum Pattern {
     Ident(SpannedString),
+    Ignored,
     TupleDestructure(Vec<SpannedString>)
 }

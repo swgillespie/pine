@@ -209,6 +209,7 @@ impl Types for TypedIdentifier {
 #[derive(Clone, Debug, RustcEncodable)]
 pub enum Pattern {
     Ident(String),
+    Ignored,
     TupleDestructure(Vec<String>)
 }
 

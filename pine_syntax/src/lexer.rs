@@ -128,7 +128,8 @@ pub enum TokenType {
     Or,
     Extern,
     HasType,
-    RightArrow
+    RightArrow,
+    Underscore
 }
 
 /// The Lexer struct wraps an iterator of chars to provide an iterator
@@ -240,6 +241,7 @@ impl<I: Iterator<Item=char>> Lexer<I> {
             ':' => Ok(Token::new(starting_position, self.current_position, HasType)),
             '[' => Ok(Token::new(starting_position, self.current_position, LBracket)),
             ']' => Ok(Token::new(starting_position, self.current_position, RBracket)),
+            '_' => Ok(Token::new(starting_position, self.current_position, Underscore)),
             '-' => self.minus_or_right_arrow(starting_position),
             '=' => self.single_or_double_eq(starting_position),
             '<' => self.less_operator_or_arrow(starting_position),

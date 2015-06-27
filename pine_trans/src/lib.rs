@@ -9,4 +9,3 @@ mod llvm_trans;
 
 pub use monomorphize::monomorphize;
 pub use llvm_trans::{translate, TranslatedModule};
-

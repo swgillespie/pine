@@ -561,6 +561,13 @@ impl<I: Iterator<Item=char>> Parser<I> {
                 data: Pattern::Ident(ident)
             });
         }
+        if next_token_one_of!(self.lexer, Underscore) {
+            let span = try!(self.parse_token(Underscore));
+            return Ok(Spanned {
+                span: span,
+                data: Pattern::Ignored
+            });
+        }
         let Span(start, _) = try!(self.parse_token(LParen));
         let fields = try!(self.comma_sep_ident());
         let Span(_, stop) = try!(self.parse_token(RParen));
