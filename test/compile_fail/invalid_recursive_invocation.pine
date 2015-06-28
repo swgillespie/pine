@@ -1,0 +1,8 @@
+def fact n do # error: failed to unify
+  if n == 0 then 1
+  else n * fact("not an int") end
+end
+
+def main do
+  fact(1)
+end

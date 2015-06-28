@@ -75,7 +75,8 @@ pub fn do_compilation(session: &mut Session) {
     let (pass_3_elapsed_time, success) = record_time(|| {
         identify_main_function(session, &mut typed_asts)
     });
-    if !success {
+
+    if !success || session.options.no_trans {
         return;
     }
 

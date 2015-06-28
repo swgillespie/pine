@@ -28,7 +28,6 @@ fn main() {
         process::exit(1);
     }
 
-    //println!("{:?}", compile_options);
     let mut session = driver::Session::new(compile_options);
     driver::do_compilation(&mut session);
 
@@ -48,4 +47,3 @@ fn print_usage(options: &getopts::Options) {
     let brief = "Usage: pinec [options]";
     print!("{}", options.usage(brief));
 }
-

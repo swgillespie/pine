@@ -1,0 +1,8 @@
+def fibonacci n do
+  if n == 0 or n == 1 then 1
+  else fibonacci(n-1) + fibonacci(n-2) end
+end
+
+def main do
+  fibonacci(0)
+end

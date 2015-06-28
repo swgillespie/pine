@@ -1,0 +1,13 @@
+# output:3628800
+extern def print_int_line : int -> unit
+
+def factorial n do
+  if n == 0 then 1
+  else n * factorial(n-1) end
+end
+
+def main do
+  let fact = factorial(10) in
+  let _ = print_int_line(fact) in
+  0
+end

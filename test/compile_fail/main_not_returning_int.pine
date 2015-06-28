@@ -1,0 +1,4 @@
+# error: failed to unify
+def main do
+  "not an int"
+end

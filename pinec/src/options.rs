@@ -10,7 +10,8 @@ pub struct CompilationOptions {
     pub input_files: Vec<String>,
     pub errors_as_json: bool,
     pub ast_as_json: bool,
-    pub print_times: bool
+    pub print_times: bool,
+    pub no_trans: bool
 }
 
 impl Default for CompilationOptions {
@@ -22,7 +23,8 @@ impl Default for CompilationOptions {
             input_files: vec![],
             errors_as_json: false,
             ast_as_json: false,
-            print_times: false
+            print_times: false,
+            no_trans: false,
         }
     }
 }
@@ -35,6 +37,7 @@ pub fn initialize_command_line_opts() -> Options {
     opts.optflag("j", "error-json", "output errors as json");
     opts.optflag("a", "ast-json", "output ast as json");
     opts.optflag("b", "benchmark", "output times for every pass");
+    opts.optflag("n", "no-trans", "perform type resolution only");
     return opts;
 }
 
@@ -49,5 +52,6 @@ pub fn parse_options(opts: &Options, args: &[String]) -> CompilationOptions {
         .map(|s| PathBuf::from(s));
     options.input_files = matches.free.clone();
     options.print_times = matches.opt_present("b");
+    options.no_trans = matches.opt_present("n");
     options
 }
