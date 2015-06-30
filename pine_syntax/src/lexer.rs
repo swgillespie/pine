@@ -61,7 +61,6 @@ pub struct LexerError {
 
 #[derive(PartialEq, Eq, Copy, Clone, Debug)]
 pub enum LexerErrorKind {
-    LiteralOverflow,
     UnknownCharacter,
     InvalidNumericLiteral,
     UnterminatedStringLiteral,
@@ -71,7 +70,6 @@ pub enum LexerErrorKind {
 impl From<LexerError> for CompileDiagnostic {
     fn from(err: LexerError) -> CompileDiagnostic {
         let message = match err.kind {
-            LexerErrorKind::LiteralOverflow => "value is too big for literal",
             LexerErrorKind::UnknownCharacter => "unknown character",
             LexerErrorKind::InvalidNumericLiteral => "invalid numeric literal",
             LexerErrorKind::UnterminatedStringLiteral => "unexpected EOF while scanning string literal",

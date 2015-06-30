@@ -1,4 +1,4 @@
-#![feature(hash)]
+#![feature(hash_default)]
 extern crate llvm_sys;
 extern crate pine_typecheck;
 #[macro_use]
