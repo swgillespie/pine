@@ -143,25 +143,16 @@ impl<I: Iterator<Item=char>> Iterator for Lexer<I> {
     type Item = Result<Token, CompileDiagnostic>;
 
     fn next(&mut self) -> Option<Result<Token, CompileDiagnostic>> {
-        if let None = self.iter.peek() {
-            None
-        } else {
-            loop {
-                // TODO this is not particularly effective
-                self.skip_to_next_non_whitespace_char();
-                self.skip_comments();
-                if let Some(c) = self.iter.peek() {
-                    if !c.is_whitespace() {
-                        break;
-                    }
-                } else {
-                    break;
-                }
-            }
-            if let None = self.iter.peek() {
-                None
-            } else {
-                Some(self.initial_state())
+        loop {
+            // the initial state can branch into three states. If the current
+            // character is whitespace, the iterator is advanced until it's not
+            // looking at whitespace. If the current character is #, the iterator
+            // is advanced until it reaches a newline character.
+            match self.iter.peek().cloned() {
+                Some('#') => self.skip_line_due_to_comment(),
+                Some(c) if c.is_whitespace() => self.skip_to_next_non_whitespace_char(),
+                Some(_) => return Some(self.initial_state()),
+                None => return None
             }
         }
     }
@@ -180,6 +171,23 @@ impl<I: Iterator<Item=char>> Lexer<I> {
         &self.filename
     }
 
+    fn skip_line_due_to_comment(&mut self) {
+        // current character is a #.
+        loop {
+            match self.iter.next() {
+                Some('\n') => {
+                    self.current_position.0 += 1;
+                    self.current_position.1 = 0;
+                    break;
+                },
+                Some(_) => {
+                    self.current_position.1 += 1;
+                },
+                None => break
+            }
+        }
+    }
+
     fn skip_to_next_non_whitespace_char(&mut self) {
         loop {
             match self.iter.peek() {
@@ -193,24 +201,6 @@ impl<I: Iterator<Item=char>> Lexer<I> {
             } else {
                 self.current_position.1 += 1;
             }
-        }
-    }
-
-    fn skip_comments(&mut self) {
-        match self.iter.peek() {
-            Some(&'#') => loop {
-                match self.iter.next() {
-                    Some('\n') => {
-                        self.current_position.0 += 1;
-                        self.current_position.1 = 0;
-                    }
-                    Some(_) => {
-                        self.current_position.1 += 1;
-                    },
-                    None => break
-                }
-            },
-            _ => {}
         }
     }
 
