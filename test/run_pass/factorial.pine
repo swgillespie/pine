@@ -1,5 +1,5 @@
 # output:3628800
-extern def print_int_line : int -> unit
+extern def print_int : int -> unit
 
 def factorial n do
   if n == 0 then 1
@@ -8,6 +8,6 @@ end
 
 def main do
   let fact = factorial(10) in
-  let _ = print_int_line(fact) in
+  let _ = print_int(fact) in
   0
 end

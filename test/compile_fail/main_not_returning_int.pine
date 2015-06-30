@@ -1,4 +1,4 @@
-# error: failed to unify
+# error: unable to unify
 def main do
   "not an int"
 end

@@ -48,7 +48,7 @@ $(PINE_COMPILER):
 
 $(PINE_RUNTIME): $(PINE_RUNTIME_OBJECTS)
 	mkdir -p $(TARGET_DIR)
-	$(CC) $(LDFLAGS) $(OBJECTS) -shared -o $(PINE_RUNTIME)
+	$(CC) $(LDFLAGS) $(PINE_RUNTIME_OBJECTS) -shared -o $(PINE_RUNTIME)
 
 %.o: %.c
 	$(CC) $(CFLAGS) -c -o $@ $<
@@ -58,7 +58,7 @@ install: $(PINE_COMPILER) $(PINE_RUNTIME)
 	cp $(PINE_RUNTIME) $(INSTALL_PATH)/lib
 
 test: $(PINE_COMPILER) $(PINE_RUNTIME) $(PINE_TEST_HARNESS)
-	PINEC=$(PINE_COMPILER) PINEC_TEST_SOURCES=$(PINEC_TEST_DIR) $(PINE_TEST_HARNESS)
+	RUST_TEST_THREADS=1 PINE_BINARIES=$(TARGET_DIR) PINEC_TEST_SOURCES=$(PINEC_TEST_DIR) $(PINE_TEST_HARNESS)
 
 $(PINE_TEST_HARNESS):
 	cd pine_test; cargo build $(CARGO_FLAGS)
@@ -66,6 +66,10 @@ $(PINE_TEST_HARNESS):
 
 check-%:
 	@echo $($*)
+
+compiler: $(PINE_COMPILER)
+
+runtime: $(PINE_RUNTIME)
 
 clean:
 	cd pinec; cargo clean

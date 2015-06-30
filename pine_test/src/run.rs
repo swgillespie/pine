@@ -3,9 +3,40 @@ use std::process::Command;
 use std::borrow::Borrow;
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader};
+use std::fmt::Debug;
 use regex::Regex;
 
 use super::Config;
+
+pub trait ChainableDebugPrint : Debug {
+    // This is a small utility function used to dump a Command
+    // object to the debug info channel while still being
+    // used in a method chain.
+    fn debug_print(&mut self) -> &mut Self {
+        debug!("{:?}", self);
+        self
+    }
+}
+
+pub struct FileGuard<'a> {
+    filename: &'a Path
+}
+
+impl<'a> FileGuard<'a> {
+    pub fn new(name: &'a Path) -> FileGuard {
+        FileGuard {
+            filename: name
+        }
+    }
+}
+
+impl<'a> Drop for FileGuard<'a> {
+    fn drop(&mut self) {
+        fs::remove_file(self.filename).unwrap();
+    }
+}
+
+impl ChainableDebugPrint for Command {}
 
 pub fn run_cpass_test(config: &Config, file: &Path) {
     // inovke the compiler, assert that the compiler exits
@@ -14,6 +45,7 @@ pub fn run_cpass_test(config: &Config, file: &Path) {
     let cmd = Command::new(&config.pinec)
         .arg(file)
         .arg("--no-trans")
+        .debug_print()
         .output()
         .unwrap();
     if cmd.status.code().unwrap() != 0 {
@@ -41,6 +73,7 @@ pub fn run_cfail_test(config: &Config, file: &Path) {
     let cmd = Command::new(&config.pinec)
         .arg(file)
         .arg("--no-trans")
+        .debug_print()
         .output()
         .unwrap();
     if cmd.status.code().unwrap() == 0 {
@@ -74,9 +107,10 @@ fn calculate_expected_diags(file: &Path) -> Vec<(i32, String)> {
         let actual_line = line.unwrap();
         if let Some(capture) = regex.captures(&actual_line) {
             let messages = capture.name("message").unwrap();
-            diagnostics.push(((line_number + 1) as i32, messages.to_string()));
+            diagnostics.push((line_number as i32, messages.to_string()));
         }
     }
+    debug!("expected diagnostics: {:?}", diagnostics);
     diagnostics
 }
 
@@ -101,8 +135,10 @@ pub fn run_rpass_test(config: &Config, file: &Path) {
     debug!("running rpass test on {:?}", file);
     let this_folder = file.to_path_buf();
     let mut object_file = this_folder.clone();
+    object_file.pop();
     object_file.push("object.o");
     let mut executable_file = this_folder.clone();
+    executable_file.pop();
     executable_file.push("object");
     let expected_output = calculate_expected_output(file);
     // remove the output file if it exists.
@@ -112,6 +148,7 @@ pub fn run_rpass_test(config: &Config, file: &Path) {
         .arg(file)
         .arg("-o")
         .arg(&object_file)
+        .debug_print()
         .output()
         .unwrap();
     // fail if pinec failed.
@@ -119,6 +156,7 @@ pub fn run_rpass_test(config: &Config, file: &Path) {
         panic!("pinec exited with non-zero exit code. stdout:\n{}",
             String::from_utf8(cmd.stdout).unwrap());
     }
+
     // invoke the system linker to produce an executable
     // TODO something more general than just clang
     let clang = Command::new("clang")
@@ -126,22 +164,27 @@ pub fn run_rpass_test(config: &Config, file: &Path) {
         .arg("-o")
         .arg(&executable_file)
         .arg("-lpinert")
+        .arg("-L")
+        .arg(&config.pine_runtime)
+        .debug_print()
         .output()
         .unwrap();
     if clang.status.code().unwrap() != 0 {
         panic!("clang exited with non-zero exit code");
     }
+    let _object_file_guard = FileGuard::new(&object_file);
+
     // finally, invoke the generated executable.
     let compiled = Command::new(&executable_file)
+        .debug_print()
         .output()
         .unwrap();
+    let _executable_file_guard = FileGuard::new(&executable_file);
     // clear out the compiled stuff
-    fs::remove_file(&object_file).unwrap();
-    fs::remove_file(&executable_file).unwrap();
     if let Some(output) = expected_output {
-        let stdout = String::from_utf8_lossy(&cmd.stdout).into_owned();
+        let stdout = String::from_utf8(compiled.stdout).unwrap();
         if stdout != output {
-            panic!("expected output of program to be {}, got {}", stdout, output);
+            panic!("expected output of program to be {}, got {}", output, stdout);
         }
     } else {
         if compiled.status.code().unwrap() != 0 {
@@ -156,9 +199,11 @@ fn calculate_expected_output(file: &Path) -> Option<String> {
     let mut reader = BufReader::new(open_file);
     let mut buf = String::new();
     reader.read_line(&mut buf).unwrap();
-    if let Some(capture) = regex.captures(&buf) {
+    let output = if let Some(capture) = regex.captures(&buf) {
         Some(capture.name("output").unwrap().to_string())
     } else {
         None
-    }
+    };
+    debug!("expected output: {:?}", output);
+    output
 }

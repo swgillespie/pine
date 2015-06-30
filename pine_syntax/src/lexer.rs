@@ -206,6 +206,11 @@ impl<I: Iterator<Item=char>> Lexer<I> {
 
     fn next_char(&mut self) -> Option<char> {
         match self.iter.next() {
+            Some('\n') => {
+                self.current_position.0 += 1;
+                self.current_position.1 = 0;
+                Some('\n')
+            },
             Some(c) => {
                 self.current_position.1 += 1;
                 Some(c)

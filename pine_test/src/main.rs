@@ -18,35 +18,55 @@ use std::fs;
 #[derive(Clone)]
 pub struct Config {
     pinec: PathBuf,
+    pine_runtime: PathBuf,
     sources: PathBuf,
 }
 
 fn main() {
     env_logger::init().unwrap();
-    let pinec_path = match env::var("PINEC") {
+    let binary_path = match env::var("PINE_BINARIES") {
         Ok(value) => PathBuf::from(value),
-        Err(_) => abort_with_message("failed to read PINEC environment variable, please set it \
-                                      to the path of the PINEC compiler to test.")
+        Err(_) => abort_with_message("failed to read PINE_BINARIES environment variable, please set it \
+                                      to the path of the Pine binaries compiler to test.")
     };
     let test_dir = match env::var("PINEC_TEST_SOURCES") {
         Ok(value) => PathBuf::from(value),
         Err(_) => abort_with_message("failed to read PINEC_TEST_SOURCES environment variable, \
                                       please set it to the path of the pine sources to test")
     };
+    let mut pinec = binary_path.clone();
+    pinec.push("pinec");
     let config = Config {
-        pinec: pinec_path,
+        pinec: pinec,
+        pine_runtime: binary_path,
         sources: test_dir,
     };
+
+    set_ld_library_path(&config);
 
     let shared_conf = Arc::new(config);
     let tests = construct_tests(shared_conf.clone());
     let options = construct_opts(&shared_conf);
     match test::run_tests_console(&options, tests) {
-        Ok(true) => {},
-        Ok(false) => abort_with_message("there were test failures"),
+        Ok(true) => process::exit(0),
+        Ok(false) => process::exit(1),
         Err(e) => abort_with_message(format!("test running failed with error: {:?}", e))
     }
-    process::exit(0);
+}
+
+fn set_ld_library_path(config: &Config) {
+    let variable_name = if cfg!(target_os = "macos") {
+        "DYLD_LIBRARY_PATH"
+    } else if cfg!(target_os = "linux") {
+        "LD_LIBRARY_PATH"
+    } else {
+        panic!("unknown target os!")
+    };
+    let mut value = env::var(&variable_name).unwrap_or(String::new());
+    value.push_str(":");
+    value.push_str(config.pine_runtime.to_str().unwrap());
+    debug!("setting ld/dyld path to {}", value);
+    env::set_var(&variable_name, value);
 }
 
 fn construct_opts(_: &Config) -> test::TestOpts {

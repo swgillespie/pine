@@ -13,7 +13,6 @@ use std::io::prelude::*;
 use std::fs::File;
 use std::convert::AsRef;
 use std::process::Command;
-use std::ffi::OsStr;
 use std::fs;
 
 pub struct Session {
@@ -224,9 +223,7 @@ fn translate(session: &Session, asts: &mut TypedCompilationUnit) {
     let module = pine_trans::translate(asts, &session.filename);
     module.verify();
     let output_file = match session.options.output_file {
-        Some(ref path) => path.file_stem()
-            .unwrap_or(OsStr::new("a.out"))
-            .to_str()
+        Some(ref path) => path.to_str()
             .unwrap()
             .to_string(),
         None => "a.out".to_string()
@@ -237,15 +234,13 @@ fn translate(session: &Session, asts: &mut TypedCompilationUnit) {
 
 fn optimization_passes(session: &Session) {
     let output_file = match session.options.output_file {
-        Some(ref path) => path.file_stem()
-            .unwrap_or(OsStr::new("a.out"))
-            .to_str()
+        Some(ref path) => path.to_str()
             .unwrap()
             .to_string(),
         None => "a.out".to_string()
     };
 
-    let object_file = output_file.clone() + ".o";
+    let object_file = output_file.clone();
     let bitcode_file = output_file.clone() + ".bc";
     // TODO - a "real" compiler would use the LLVM C api to build up
     // a list of passes and run them on the module to produce a new
@@ -257,7 +252,7 @@ fn optimization_passes(session: &Session) {
         .arg("-O2")
         .arg(&bitcode_file)
         .arg("-o")
-        .arg(&bitcode_file)
+        .arg(&object_file)
         .output()
         .ok()
         .expect("failed to invoke `opt`!");

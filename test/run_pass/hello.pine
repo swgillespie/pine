@@ -1,0 +1,7 @@
+# output:hello
+extern def print_string : string -> unit
+
+def main do
+  let _ = print_string("hello") in
+  0
+end
