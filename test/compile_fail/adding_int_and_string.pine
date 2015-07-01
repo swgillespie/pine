@@ -1,0 +1,3 @@
+def main do
+  5 + "not an int" # error: failed to unify
+end

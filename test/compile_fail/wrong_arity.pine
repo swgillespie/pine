@@ -1,0 +1,7 @@
+def two_parameters a, b do
+  a + b
+end
+
+def main do
+  two_parameters(1, 2, 3) # error: failed to unify
+end

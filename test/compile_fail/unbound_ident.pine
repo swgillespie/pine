@@ -1,0 +1,3 @@
+def main do
+  unbound_ident # error: unbound identifier
+end

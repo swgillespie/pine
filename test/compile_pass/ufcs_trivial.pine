@@ -1,0 +1,7 @@
+def add_one n do
+  n + 1
+end
+
+def main do
+  5.add_one
+end

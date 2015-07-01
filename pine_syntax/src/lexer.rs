@@ -312,7 +312,6 @@ impl<I: Iterator<Item=char>> Lexer<I> {
         buf.push(c);
         // while the thing that we're looking at is a digit, grab it
         // and stick it on the buffer.
-        let mut seen_dot = false;
         loop {
             let matched = match self.iter.peek() {
                 Some(c) => *c,
@@ -323,33 +322,14 @@ impl<I: Iterator<Item=char>> Lexer<I> {
                     let _ = self.next_char();
                     buf.push(c);
                 },
-                '.' if !seen_dot => {
-                    let _ = self.next_char();
-                    seen_dot = true;
-                    buf.push('.');
-                },
-                '.' if seen_dot => {
-                    return self.span_err(start, self.current_position, LexerErrorKind::InvalidNumericLiteral);
-                },
                 _ => break
             }
         }
-        let tok = if seen_dot {
-            // this is a float literal.
-            let float_val : Option<f32> = FromStr::from_str(&buf).ok();
-            if let Some(value) = float_val {
-                Token::new(start, self.current_position, FloatLiteral(value))
-            } else {
-                return self.span_err(start, self.current_position, LexerErrorKind::InvalidNumericLiteral);
-            }
+        let int_val : Option<i32> = FromStr::from_str(&buf).ok();
+        let tok = if let Some(value) = int_val {
+            Token::new(start, self.current_position, IntLiteral(value))
         } else {
-            // otherwise, it's a integer literal
-            let int_val : Option<i32> = FromStr::from_str(&buf).ok();
-            if let Some(value) = int_val {
-                Token::new(start, self.current_position, IntLiteral(value))
-            } else {
-                return self.span_err(start, self.current_position, LexerErrorKind::InvalidNumericLiteral);
-            }
+            return self.span_err(start, self.current_position, LexerErrorKind::InvalidNumericLiteral);
         };
         Ok(tok)
     }
