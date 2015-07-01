@@ -4,5 +4,5 @@ script: make test
 addons:
   apt:
     packages:
-      - libgc
-      - llvm-3.6
+      - libgc-dev
+      - llvm-3.6-dev
