@@ -1,0 +1,8 @@
+language: rust
+rust: nightly
+script: make test
+addons:
+  apt:
+    packages:
+      - libgc
+      - llvm-3.6
