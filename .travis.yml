@@ -5,4 +5,4 @@ addons:
   apt:
     packages:
       - libgc-dev
-      - llvm-3.6-dev
+      - clang-3.6
