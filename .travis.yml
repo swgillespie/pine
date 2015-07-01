@@ -1,9 +1,0 @@
-language: rust
-rust: nightly
-script: make test
-addons:
-  apt:
-    packages:
-      - libgc-dev
-      - clang-3.4
-      - llvm-3.4-dev
