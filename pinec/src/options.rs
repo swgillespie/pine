@@ -11,7 +11,8 @@ pub struct CompilationOptions {
     pub errors_as_json: bool,
     pub ast_as_json: bool,
     pub print_times: bool,
-    pub no_trans: bool
+    pub no_trans: bool,
+    pub print_version: bool
 }
 
 impl Default for CompilationOptions {
@@ -25,6 +26,7 @@ impl Default for CompilationOptions {
             ast_as_json: false,
             print_times: false,
             no_trans: false,
+            print_version: false
         }
     }
 }
@@ -38,6 +40,7 @@ pub fn initialize_command_line_opts() -> Options {
     opts.optflag("a", "ast-json", "output ast as json");
     opts.optflag("b", "benchmark", "output times for every pass");
     opts.optflag("n", "no-trans", "perform type resolution only");
+    opts.optflag("v", "version", "prints the version of the compiler and exits");
     return opts;
 }
 
@@ -53,5 +56,6 @@ pub fn parse_options(opts: &Options, args: &[String]) -> CompilationOptions {
     options.input_files = matches.free.clone();
     options.print_times = matches.opt_present("b");
     options.no_trans = matches.opt_present("n");
+    options.print_version = matches.opt_present("v");
     options
 }

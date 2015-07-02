@@ -1,0 +1,5 @@
+def main do
+  if true then
+    42 # error: failed to unify
+  end
+end

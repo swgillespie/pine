@@ -23,6 +23,11 @@ fn main() {
         process::exit(0);
     }
 
+    if compile_options.print_version {
+        print_version();
+        process::exit(0);
+    }
+
     if compile_options.input_files.len() == 0 {
         println!("pinec: error: no input files");
         process::exit(1);
@@ -46,4 +51,10 @@ fn main() {
 fn print_usage(options: &getopts::Options) {
     let brief = "Usage: pinec [options]";
     print!("{}", options.usage(brief));
+}
+
+fn print_version() {
+    let version = option_env!("PINEC_VERSION").unwrap_or("(unknown version)");
+    let time = option_env!("PINEC_COMPILE_TIME").unwrap_or("unknkown date");
+    println!("pinec {} ({})", version, time);
 }

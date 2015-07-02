@@ -7,6 +7,9 @@ CFLAGS := -fpic -std=c99 -Wall -Werror -Wextra -pedantic -Wshadow    \
 					-I$(RUNTIME_INCLUDE_DIR)
 LDFLAGS := -lgc
 
+PINEC_VERSION=0.0.1-alpha
+PINEC_COMPILE_TIME=$(shell date)
+
 PINEC := pinec
 
 UNAME_S := $(shell uname -s)
@@ -43,7 +46,7 @@ all: $(PINE_COMPILER) $(PINE_RUNTIME)
 
 $(PINE_COMPILER):
 	mkdir -p $(TARGET_DIR)
-	cd pinec; cargo build $(CARGO_FLAGS)
+	cd pinec; PINEC_VERSION="$(PINEC_VERSION)" PINEC_COMPILE_TIME="$(PINEC_COMPILE_TIME)" cargo build $(CARGO_FLAGS)
 	cp pinec/$(PINE_COMPILER) $(PINE_COMPILER)
 
 $(PINE_RUNTIME): $(PINE_RUNTIME_OBJECTS)

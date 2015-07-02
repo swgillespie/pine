@@ -1,0 +1,7 @@
+def main do
+  if true then
+    42
+  else
+    "string" # error: failed to unify
+  end
+end
