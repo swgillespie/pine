@@ -7,9 +7,6 @@ CFLAGS := -fpic -std=c99 -Wall -Werror -Wextra -pedantic -Wshadow    \
 					-I$(RUNTIME_INCLUDE_DIR)
 LDFLAGS := -lgc
 
-PINEC_VERSION=0.0.1-alpha
-PINEC_COMPILE_TIME=$(shell date)
-
 PINEC := pinec
 
 UNAME_S := $(shell uname -s)
@@ -23,6 +20,9 @@ endif
 ifndef RUNTIME_NAME
 	$(error your platform isn't supported, sorry! Only Linux and Darwin work.)
 endif
+
+PINEC_VERSION=0.0.1-alpha
+PINEC_COMPILE_TIME=$(shell date)
 
 ifeq ($(RELEASE),1)
 	TARGET_DIR :=target/release
@@ -42,40 +42,45 @@ PINE_RUNTIME_OBJECTS := $(PINE_RUNTIME_SOURCES:.c=.o)
 PINEC_SOURCE_DIR := pinec
 PINEC_TEST_DIR := test
 
-all: $(PINE_COMPILER) $(PINE_RUNTIME)
+all: cargo_build_pinec $(PINE_RUNTIME)
+	@echo "[+] Build complete!"
 
-$(PINE_COMPILER):
-	mkdir -p $(TARGET_DIR)
-	cd pinec; PINEC_VERSION="$(PINEC_VERSION)" PINEC_COMPILE_TIME="$(PINEC_COMPILE_TIME)" cargo build $(CARGO_FLAGS)
-	cp pinec/$(PINE_COMPILER) $(PINE_COMPILER)
+cargo_build_pinec:
+	@mkdir -p $(TARGET_DIR)
+	@echo "[+] Building pine compiler -> $(PINE_COMPILER)"
+	@cd pinec; PINEC_VERSION="$(PINEC_VERSION)" PINEC_COMPILE_TIME="$(PINEC_COMPILE_TIME)" cargo build $(CARGO_FLAGS)
+	@cp pinec/$(PINE_COMPILER) $(PINE_COMPILER)
 
 $(PINE_RUNTIME): $(PINE_RUNTIME_OBJECTS)
-	mkdir -p $(TARGET_DIR)
-	$(CC) $(LDFLAGS) $(PINE_RUNTIME_OBJECTS) -shared -o $(PINE_RUNTIME)
+	@mkdir -p $(TARGET_DIR)
+	@echo "[+] Linking pine runtime -> $(PINE_RUNTIME)"
+	@$(CC) $(LDFLAGS) $(PINE_RUNTIME_OBJECTS) -shared -o $(PINE_RUNTIME)
 
 %.o: %.c
-	$(CC) $(CFLAGS) -c -o $@ $<
+	@echo "[+] CC $< -> $@"
+	@$(CC) $(CFLAGS) -c -o $@ $<
 
-install: $(PINE_COMPILER) $(PINE_RUNTIME)
-	cp $(PINE_COMPILER) $(INSTALL_PATH)/bin
-	cp $(PINE_RUNTIME) $(INSTALL_PATH)/lib
+install: cargo_build_pinec $(PINE_RUNTIME)
+	@echo "[+] $(PINE_COMPILER) -> $(INSTALL_PATH)/bin"
+	@cp $(PINE_COMPILER) $(INSTALL_PATH)/bin
+	@echo "[+] $(PINE_RUNTIME) -> $(INSTALL_PATH)/lib"
+	@cp $(PINE_RUNTIME) $(INSTALL_PATH)/lib
 
-test: $(PINE_COMPILER) $(PINE_RUNTIME) $(PINE_TEST_HARNESS)
-	RUST_TEST_THREADS=1 PINE_BINARIES=$(TARGET_DIR) PINEC_TEST_SOURCES=$(PINEC_TEST_DIR) $(PINE_TEST_HARNESS)
+test: cargo_build_pinec $(PINE_RUNTIME) cargo_build_test_harness
+	@echo "[+] Running tests"
+	@RUST_TEST_THREADS=1 PINE_BINARIES=$(TARGET_DIR) PINEC_TEST_SOURCES=$(PINEC_TEST_DIR) $(PINE_TEST_HARNESS)
 
-$(PINE_TEST_HARNESS):
-	cd pine_test; cargo build $(CARGO_FLAGS)
-	cp pine_test/$(PINE_TEST_HARNESS) $(PINE_TEST_HARNESS)
+cargo_build_test_harness:
+	@echo "[+] Building pinec test harness -> $(PINE_TEST_HARNESS)"
+	@cd pine_test; cargo build $(CARGO_FLAGS)
+	@cp pine_test/$(PINE_TEST_HARNESS) $(PINE_TEST_HARNESS)
 
 check-%:
 	@echo $($*)
 
-compiler: $(PINE_COMPILER)
-
-runtime: $(PINE_RUNTIME)
-
 clean:
-	cd pinec; cargo clean
-	cd pine_test; cargo clean
-	rm -rf target
-	rm -f $(shell find pine_rt -name "*.o") $(shell find . -name "*~")
+	@echo "[+] Removing compilation artifacts"
+	@cd pinec; cargo clean
+	@cd pine_test; cargo clean
+	@rm -rf target
+	@rm -f $(shell find pine_rt -name "*.o") $(shell find . -name "*~")
