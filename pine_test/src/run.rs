@@ -107,7 +107,7 @@ fn calculate_expected_diags(file: &Path) -> Vec<(i32, String)> {
         let actual_line = line.unwrap();
         if let Some(capture) = regex.captures(&actual_line) {
             let messages = capture.name("message").unwrap();
-            diagnostics.push((line_number as i32, messages.to_string()));
+            diagnostics.push(((line_number + 1) as i32, messages.to_string()));
         }
     }
     debug!("expected diagnostics: {:?}", diagnostics);

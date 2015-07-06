@@ -163,7 +163,7 @@ impl<I: Iterator<Item=char>> Lexer<I> {
         Lexer {
             filename: filename,
             iter: iter.peekable(),
-            current_position: Position(0, 0)
+            current_position: Position(1, 0)
         }
     }
 

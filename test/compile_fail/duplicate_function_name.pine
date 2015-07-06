@@ -1,0 +1,11 @@
+def named_function do
+  5
+end
+
+def named_function n do # error:`named_function` already exists in this environment
+  n + 1
+end
+
+def main do
+  0
+end

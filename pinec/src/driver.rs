@@ -36,7 +36,7 @@ impl Session {
         let ref_msg = message.as_ref();
         let diagnostic = CompileDiagnostic {
             filename: self.filename.clone(),
-            span: Span(Position(0, 0), Position(0, 0)),
+            span: Span(Position(1, 0), Position(1, 0)),
             severity: Severity::Error,
             message: ref_msg.to_string()
         };

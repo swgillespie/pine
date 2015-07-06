@@ -1,0 +1,9 @@
+def fun do
+  let x = 1 + 2 in
+  let x = "hello" in # error:`x` already exists in this environment
+  x
+end
+
+def main do
+  0
+end

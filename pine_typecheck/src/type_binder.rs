@@ -6,6 +6,8 @@ use types::{self, Type, TypeConst, TypeEnv, Substitution, compose_subst, Types, 
 use typed_ast as typed;
 use typed_ast::Typed;
 
+use std::collections::hash_map::Entry;
+
 pub struct TypeBinder {
     filename: String,
     env: TypeEnv
@@ -44,16 +46,28 @@ impl TypeBinder {
             .map(|x| x.data.clone())
             .collect();
         for name in param_names.iter() {
-            self.env.insert(name.clone(), Scheme {
-                vars: vec![],
-                ty: types::new_var()
-            });
+            match self.env.entry(name.clone()) {
+                Entry::Occupied(_) => span_err_and_return!(self, func.name,
+                    format!("`{}` already exists in this environment", name)),
+                Entry::Vacant(v) => {
+                    v.insert(Scheme {
+                        vars: vec![],
+                        ty: types::new_var()
+                    });
+                }
+            }
         }
 
-        self.env.insert(func.name.data.clone(), Scheme {
-            vars: vec![],
-            ty: types::new_var()
-        });
+        match self.env.entry(func.name.data.clone()) {
+            Entry::Occupied(_) => span_err_and_return!(self, func.name,
+                format!("`{}` already exists in this environment", func.name.data.clone())),
+            Entry::Vacant(v) => {
+                v.insert(Scheme {
+                    vars: vec![],
+                    ty: types::new_var()
+                });
+            }
+        }
 
         let (ref s1, ref t1) = try!(self.visit_body(&func.body));
         info!(target: "type-inference", "return type `{}` inferred for function `{}`", t1.ty, func.name.data);
@@ -390,7 +404,15 @@ impl TypeBinder {
 
         self.env.apply_subst(s1);
         let generalized_type = types::generalize(&self.env, &t1.ty);
-        self.env.insert(ident.clone(), generalized_type);
+
+        match self.env.entry(ident.clone()) {
+            Entry::Occupied(_) => span_err_and_return!(self, pat,
+                format!("`{}` already exists in this environment", ident)),
+            Entry::Vacant(v) => {
+                v.insert(generalized_type);
+            }
+        }
+
         self.env.apply_subst(s1);
 
         let bound_body = try!(self.visit_expression(body));

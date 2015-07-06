@@ -1,0 +1,7 @@
+def bad_function n, n do # error:`n` already exists in this environment
+  n + 1
+end
+
+def main do
+  0
+end
